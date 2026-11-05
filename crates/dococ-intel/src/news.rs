@@ -158,6 +158,30 @@ fn parse_rfc2822(s: &str) -> Option<i64> {
     None
 }
 
+/// Parse exchange announcements (simplified JSON array).
+pub fn parse_exchange_announcements(json: &str, source: &str) -> Vec<NewsItem> {
+    let mut items = Vec::new();
+    let mut pos = 0;
+    while let Some(start) = json[pos..].find("\"title\"") {
+        let abs = pos + start;
+        let obj_start = json[..abs].rfind('{').unwrap_or(abs);
+        let obj_end = json[abs..].find('}').map(|e| abs + e + 1).unwrap_or(json.len());
+        let block = &json[obj_start..obj_end];
+        pos = obj_end;
+
+        let title = extract_json_string(block, "title").unwrap_or_default();
+        if title.is_empty() {
+            continue;
+        }
+
+        let url = extract_json_string(block, "url");
+        let mut item = NewsItem::new(0, source, &title);
+        item.url = url;
+        item.relevance = 0.9; // Exchange announcements are high relevance
+        items.push(item);
+    }
+    items
+}
 fn extract_json_string(json: &str, key: &str) -> Option<String> {
     let pattern = format!("\"{}\"", key);
     let idx = json.find(&pattern)?;
@@ -252,6 +276,16 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert!(items[0].headline.contains("Non-Farm Payrolls"));
         assert!(items[0].headline.contains("USD"));
+    }
+
+    #[test]
+    fn parse_exchange_announcements_test() {
+        let json = r#"[{"title":"New listing: XYZ/USDT","url":"https://example.com/1"}]"#;
+        let items = parse_exchange_announcements(json, "binance");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].headline, "New listing: XYZ/USDT");
+        assert_eq!(items[0].source, "binance");
+        assert!((items[0].relevance - 0.9).abs() < 1e-9);
     }
 }
 
