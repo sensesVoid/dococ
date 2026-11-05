@@ -227,6 +227,8 @@ impl<S: Strategy> Engine<S> {
     }
 }
 
+mod fault;
+pub use fault::*;
 mod replay;
 pub use replay::*;
 
