@@ -1,0 +1,17 @@
+{
+  "state": "Account: paper. Equity 100000 USD. Position: flat.\nMarket: BTC/USDT perpetual. Last price 64000. 4h trend: up.\nGARCH conditional volatility: 0.012. Markov regime: trending.\nNews: spot ETF inflows positive; funding neutral.",
+  "expected": {
+    "action": "Long",
+    "action_confidence": 0.376,
+    "edge_probability": 0.5007,
+    "conviction": 1.319
+  },
+  "tolerance": 0.02,
+  "python_reference": {
+    "action": "LONG",
+    "action_confidence": 0.2675,
+    "edge_probability": 0.4953,
+    "conviction": 1.3467,
+    "note": "Multilingual fine-tuned checkpoint (v5). Action agrees (LONG); edge within 0.006; confidence/conviction diverge beyond 0.02 tolerance. English fine-tune diverged harder (SHORT vs Long). Recommend investigating calibration temperature handling (config temperature [1.08, 0.76, 5.0]) and worker-thread nondeterminism."
+  }
+}

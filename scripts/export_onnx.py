@@ -34,14 +34,11 @@ def export_onnx(model: str, output: str, verify: bool = True):
 
 
 def assemble_model_dir(ckpt: str, out_dir: str) -> str | None:
-    """Assemble the Rust-loadable model dir: model.onnx, model.onnx.data,
-    tokenizer (from checkpoint), rl_agent_config.json (from checkpoint)."""
+    """Assemble the Rust-loadable model dir: model.onnx, model.onnx.data
+    (both written by export_onnx), tokenizer (from checkpoint),
+    rl_agent_config.json (from checkpoint)."""
     import shutil
     os.makedirs(out_dir, exist_ok=True)
-    for sub in os.listdir(out_dir):
-        p = os.path.join(out_dir, sub)
-        if os.path.isfile(p):
-            os.remove(p)
     tok = os.path.join(ckpt, "tokenizer")
     if os.path.isdir(tok):
         dst = os.path.join(out_dir, "tokenizer")
