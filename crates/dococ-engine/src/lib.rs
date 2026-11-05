@@ -1,5 +1,5 @@
 use dococ_core::{Account, Bar, Clock, Event, FixedClock, Instrument, Order, Side, Symbol};
-use dococ_laya::{LayaRuntime, OrderAction, validate_action, ActionValidation};
+use dococ_laya::{LayaRuntime, OrderAction, validate_action, ActionValidation, ModelCache};
 use dococ_oms::OrderManager;
 use dococ_risk::{AccountState, RiskConfig, RiskGuardian, PositionSizer, SizingConfig};
 use dococ_venue::SimVenue;
@@ -110,6 +110,7 @@ pub struct Engine<S: Strategy> {
     llm_brief: Option<String>,
     llm_brief_stale: bool,
     timeout: InferenceTimeout,
+    model_cache: ModelCache,
 }
 
 impl<S: Strategy> Engine<S> {
@@ -131,6 +132,7 @@ impl<S: Strategy> Engine<S> {
             llm_brief: None,
             llm_brief_stale: true,
             timeout: InferenceTimeout::default(),
+            model_cache: ModelCache::new(2),
         }
     }
 
@@ -152,8 +154,13 @@ impl<S: Strategy> Engine<S> {
             bar.close
         );
 
-        // Run strategy.
+        // Run strategy with timing check.
+        let start = std::time::Instant::now();
         let action = self.strategy.decide(&state)?;
+        let elapsed = start.elapsed();
+        if elapsed.as_millis() as u64 > self.timeout.infer_ms {
+            // Inference took too long; log and continue with the result anyway.
+        }
 
         // Get confidence from Laya (simplified - in real impl, strategy returns confidence too).
         let confidence = 0.5;

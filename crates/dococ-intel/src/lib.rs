@@ -1,5 +1,14 @@
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+mod news;
+pub use news::*;
+mod sqac;
+pub use sqac::*;
+mod brief;
+pub use brief::*;
+mod audit;
+pub use audit::*;
 
 /// LLM brief schema.
 #[derive(Debug, Clone)]
@@ -14,8 +23,7 @@ pub struct LlmBrief {
 }
 
 impl LlmBrief {
-    /// Check if the brief is stale (older than 30 minutes).
-pub fn is_stale(&self, now: i64, threshold: i64) -> bool {
+    pub fn is_stale(&self, now: i64, threshold: i64) -> bool {
         now - self.as_of > threshold
     }
 }
@@ -40,16 +48,7 @@ impl Default for LlmConfig {
     }
 }
 
-/// LLM adapter result.
-#[derive(Debug, Clone)]
-pub enum LlmResult {
-    Ok(LlmBrief),
-    Timeout,
-    InvalidJson(String),
-    Failed(String),
-}
-
-/// Adapter for calling `opencode run` as a subprocess.
+/// LLM adapter for calling `opencode run` as a subprocess.
 pub struct LlmAdapter {
     config: LlmConfig,
 }
@@ -83,17 +82,101 @@ impl LlmAdapter {
         )
     }
 
+    /// Call opencode run as a subprocess and return the raw output.
+    pub fn call_subprocess(&self, prompt: &str) -> Result<String, String> {
+        let mut cmd = Command::new("opencode");
+        cmd.args([
+            "run",
+            "--standalone",
+            "--format",
+            "json",
+            "--model",
+            &self.config.model,
+            prompt,
+        ]);
+
+        let child = cmd
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("failed to spawn opencode: {}", e))?;
+
+        let timeout = Duration::from_secs(self.config.timeout_secs);
+        let start = Instant::now();
+
+        let mut child = child;
+        loop {
+            if start.elapsed() > timeout {
+                let _ = child.kill();
+                return Err("timeout".to_string());
+            }
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let output = child
+                        .wait_with_output()
+                        .map_err(|e| format!("failed to get output: {}", e))?;
+                    if !status.success() {
+                        return Err(format!("opencode exited with: {}", status));
+                    }
+                    return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+                }
+                Ok(None) => {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(e) => {
+                    return Err(format!("failed to wait: {}", e));
+                }
+            }
+        }
+    }
+
+    /// Extract the text content from opencode JSON output.
+    pub fn extract_text(output: &str) -> Option<String> {
+        let mut last_text = None;
+        for line in output.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if !trimmed.contains("\"type\":\"text\"") {
+                continue;
+            }
+            if let Some(text_idx) = trimmed.find("\"text\":\"") {
+                let start = text_idx + 8;
+                let rest = &trimmed[start..];
+                let mut end = 0;
+                let mut escaped = false;
+                for (i, c) in rest.chars().enumerate() {
+                    if escaped {
+                        escaped = false;
+                        continue;
+                    }
+                    if c == '\\' {
+                        escaped = true;
+                        continue;
+                    }
+                    if c == '"' {
+                        end = i;
+                        break;
+                    }
+                }
+                if end > 0 {
+                    let raw = &rest[..end];
+                    let unescaped = raw.replace("\\\"", "\"").replace("\\\\", "\\");
+                    last_text = Some(unescaped);
+                }
+            }
+        }
+        last_text
+    }
+
     /// Parse a JSON response into an LlmBrief.
     pub fn parse_response(&self, json_str: &str, now: i64) -> Result<LlmBrief, String> {
-        // Simple JSON parsing without serde (to avoid dependency).
-        // In production, use serde_json.
         let trimmed = json_str.trim();
         if !trimmed.starts_with('{') || !trimmed.ends_with('}') {
             return Err("response is not a JSON object".to_string());
         }
 
-        // Extract fields using simple string parsing.
-        // This is a simplified version; production should use serde_json.
         let macro_regime = extract_string_field(trimmed, "macro_regime").unwrap_or_else(|| "unknown".to_string());
         let news_bias = extract_string_field(trimmed, "news_bias").unwrap_or_else(|| "neutral".to_string());
         let event_risk = extract_string_field(trimmed, "event_risk").unwrap_or_else(|| "medium".to_string());
@@ -111,14 +194,9 @@ impl LlmAdapter {
             sources: Vec::new(),
         })
     }
-
-    /// Check if a brief is stale.
-    pub fn is_stale(brief: &LlmBrief, now: i64, threshold: i64) -> bool {
-        now - brief.as_of > threshold
-    }
 }
 
-// Simple JSON field extractors (production should use serde_json).
+// Simple JSON field extractors.
 fn extract_string_field(json: &str, field: &str) -> Option<String> {
     let pattern = format!("\"{}\"", field);
     let idx = json.find(&pattern)?;
@@ -154,19 +232,9 @@ fn extract_number_field(json: &str, field: &str) -> Option<f64> {
     let after = &json[idx + pattern.len()..];
     let colon = after.find(':')?;
     let val = after[colon + 1..].trim_start();
-    // Read until comma, brace, or whitespace.
     let end = val.find(|c: char| c == ',' || c == '}' || c.is_whitespace()).unwrap_or(val.len());
     val[..end].parse().ok()
 }
-
-mod news;
-pub use news::*;
-mod sqac;
-mod brief;
-pub use brief::*;
-mod audit;
-pub use audit::*;
-pub use sqac::*;
 
 #[cfg(test)]
 mod tests {
@@ -201,8 +269,8 @@ mod tests {
             as_of: 1000,
             sources: vec![],
         };
-        assert!(LlmBrief::is_stale(&brief, 3000, 1800)); // 2000s > 1800
-        assert!(!LlmBrief::is_stale(&brief, 2000, 1800)); // 1000s < 1800
+        assert!(LlmBrief::is_stale(&brief, 3000, 1800));
+        assert!(!LlmBrief::is_stale(&brief, 2000, 1800));
     }
 
     #[test]
@@ -227,5 +295,12 @@ mod tests {
         let json = r#"{"macro_regime":"x","news_bias":"y","event_risk":"z","correlation_flag":false,"confidence":1.5,"as_of":1000}"#;
         let brief = adapter.parse_response(json, 1000).expect("parse");
         assert!((brief.confidence - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn extract_text_from_opencode_output() {
+        let output = "{\"type\":\"step_start\",\"part\":{\"type\":\"step-start\"}}\n{\"type\":\"text\",\"part\":{\"type\":\"text\",\"text\":\"{\\\"regime\\\":\\\"risk-on\\\"}\"}}\n{\"type\":\"step_start\",\"part\":{\"type\":\"step-start\"}}";
+        let text = LlmAdapter::extract_text(output);
+        assert_eq!(text, Some("{\"regime\":\"risk-on\"}".to_string()));
     }
 }

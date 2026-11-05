@@ -21,6 +21,15 @@ where
     }
 }
 
+/// Spawn a blocking task on a new thread and wait for result with timeout.
+pub fn spawn_blocking<F, T>(f: F, timeout: Duration) -> Result<T, &'static str>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    run_with_timeout(f, timeout)
+}
+
 /// Inference timeout configuration.
 #[derive(Debug, Clone, Copy)]
 pub struct InferenceTimeout {
@@ -57,6 +66,12 @@ mod tests {
             Duration::from_millis(50),
         );
         assert_eq!(result, Err("timeout"));
+    }
+
+    #[test]
+    fn spawn_blocking_works() {
+        let result = spawn_blocking(|| "hello", Duration::from_secs(1));
+        assert_eq!(result, Ok("hello"));
     }
 
     #[test]
