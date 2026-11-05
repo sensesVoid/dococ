@@ -8,6 +8,7 @@ clap = { version = "4", features = ["derive"] }
 dococ-asset = { version = "0.1.0", path = "../dococ-asset" }
 dococ-core = { version = "0.1.0", path = "../dococ-core" }
 dococ-engine = { version = "0.1.0", path = "../dococ-engine" }
+dococ-intel = { version = "0.1.0", path = "../dococ-intel" }
 dococ-laya = { version = "0.1.0", path = "../dococ-laya" }
 dococ-risk = { version = "0.1.0", path = "../dococ-risk" }
 dococ-shadow = { version = "0.1.0", path = "../dococ-shadow" }

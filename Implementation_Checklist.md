@@ -107,7 +107,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [x] State schema v1: deterministic ordering, units, NA sentinels, token counter, template hash.
 - [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading, LRU cache, `spawn_blocking` helper + timeout fallback to NO_ACTION done. The synchronous `on_bar` tick calls the strategy directly with a post-hoc `InferenceTimeout` check — worker-thread offload happens via `decide_blocking` for async/external callers. `StateBuilder` + `MAX_STATE_TOKENS` budget enforcement wired into the tick; LRU remains storage-only.)
 - [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema, `validate_action`, invalid-action-as-NO_ACTION handling in engine tick, and strategy confidence pass-through done.)
-- [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya. (`PositionSizer` wired into engine tick; `open_notional` now computed from account positions. Vol forecast still placeholder 0.02 pending GARCH wiring.)
+- [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya. (`PositionSizer` wired; `open_notional` from positions; vol from `engine.update_volatility` — rolling returns with GARCH (`dococ-quant`, when params set) else realized-vol fallback; default 0.02 until 20 returns.)
 - [x] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry, SHA-256 verification, atomic model switch, and rollback support done.)
 - [x] Python/Rust golden tests in CI. (Base: `golden_fixture.json` + `golden.rs` — fixture integrity always runs; ONNX parity is `#[ignore]`d and needs `DOCOC_LAYA_MODEL` since `/models/` is gitignored. Fine-tuned: `golden_btcusdt.rs` + fixture, records Rust behavior with a known Python action divergence. Quant: GARCH/Markov/teacher parity fixtures run in CI via `cargo test`.)
 
@@ -115,7 +115,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 ## Phase 4 - LLM analyst and SQAC memory
 
-- [x] `dococ-intel`: `opencode run` subprocess adapter; timeout, retry, JSON validation.
+- [x] `dococ-intel`: `opencode run` subprocess adapter; timeout, retry, JSON validation. (`dococ paper --intel`/`DOCOC_INTEL=1` refreshes briefs on a 15-min schedule with schema parse + deterministic fallback; feeds `engine.on_llm_brief_with_staleness`; stale active brief blocks new entries.)
 - [x] Brief schema and deterministic fallback; stale over 30 minutes blocks new entries.
 - [x] News ingestion: GDELT, RSS, exchange announcements, economic calendar.
 - [x] SQAC adapter: retrieval schema, 2-3 cases, timeout, `timestamp < decision_time`.

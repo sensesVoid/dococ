@@ -68,6 +68,9 @@ enum Commands {
         /// Ignore saved sim state and start fresh
         #[arg(long)]
         fresh: bool,
+        /// Enable LLM intel brief via opencode (requires `opencode` CLI; falls back safely)
+        #[arg(long)]
+        intel: bool,
     },
     /// Run shadow mode: log decisions without placing orders
     Shadow {
@@ -172,6 +175,7 @@ fn main() {
             r#loop,
             interval,
             fresh,
+            intel,
         }) => {
             let model_dir = std::env::var("DOCOC_LAYA_MODEL")
                 .unwrap_or_else(|_| "models/btcusdt_ml".to_string());
@@ -184,6 +188,15 @@ fn main() {
                 symbol, model_dir, n_bars, r#loop, interval, fresh
             );
             let dry = std::env::var("DOCOC_PAPER_DRY").ok().as_deref() == Some("1");
+            let intel_enabled = intel || std::env::var("DOCOC_INTEL").ok().as_deref() == Some("1");
+            let mut intel_adapter = if intel_enabled {
+                let mut cfg = dococ_intel::LlmConfig::default();
+                cfg.timeout_secs = 90;
+                Some(dococ_intel::LlmAdapter::new(cfg))
+            } else {
+                None
+            };
+            let mut last_intel_at: i64 = 0;
             let strategy_result: Result<Box<dyn dococ_engine::Strategy>, String> = if dry {
                 println!("Paper DRY mode: using dummy strategy (no model load)");
                 Ok(Box::new(DummyPaperStrategy))
@@ -290,6 +303,58 @@ fn main() {
                         println!("Loaded {} journal row(s) (idempotent resume)", journal.len());
                     }
                     loop {
+                        let now_unix = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs() as i64;
+                        if let Some(adapter) = intel_adapter.as_ref() {
+                            if now_unix - last_intel_at >= 900 {
+                                let state_summary = format!(
+                                    "symbol={} equity={:.2} pos={:.4}",
+                                    symbol,
+                                    engine.account().equity,
+                                    engine
+                                        .account()
+                                        .get_position(&sym)
+                                        .map(|p| p.quantity)
+                                        .unwrap_or(0.0)
+                                );
+                                let prompt = adapter.build_prompt(&[], &state_summary);
+                                let brief = match adapter.call_subprocess(&prompt) {
+                                    Ok(raw) => {
+                                        let text = dococ_intel::LlmAdapter::extract_text(&raw)
+                                            .unwrap_or(raw);
+                                        match adapter.parse_response(&text, now_unix) {
+                                            Ok(b) => b,
+                                            Err(e) => {
+                                                println!("Intel parse fallback: {e}");
+                                                let fb = dococ_intel::LlmBriefSchema::fallback(now_unix);
+                                                dococ_intel::LlmBrief::from(fb)
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        println!("Intel unavailable (fallback): {e}");
+                                        let fb = dococ_intel::LlmBriefSchema::fallback(now_unix);
+                                        dococ_intel::LlmBrief::from(fb)
+                                    }
+                                };
+                                let stale = brief.is_stale(now_unix, 1800);
+                                let brief_text = format!(
+                                    "regime={} bias={} risk={} corr={} conf={:.2} as_of={} stale={}",
+                                    brief.macro_regime,
+                                    brief.news_bias,
+                                    brief.event_risk,
+                                    brief.correlation_flag,
+                                    brief.confidence,
+                                    brief.as_of,
+                                    stale
+                                );
+                                engine.on_llm_brief_with_staleness(brief_text, brief.as_of, stale);
+                                last_intel_at = now_unix;
+                                println!("Intel brief updated (as_of={}, stale={})", brief.as_of, stale);
+                            }
+                        }
                         let bars = dococ_venue::live::fetch_latest(&symbol, n_bars).unwrap_or_default();
                         if bars.is_empty() {
                             println!("No live bars fetched.");

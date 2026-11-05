@@ -752,6 +752,7 @@ dependencies = [
  "dococ-asset",
  "dococ-core",
  "dococ-engine",
+ "dococ-intel",
  "dococ-laya",
  "dococ-risk",
  "dococ-shadow",
@@ -779,6 +780,7 @@ dependencies = [
  "dococ-core",
  "dococ-laya",
  "dococ-oms",
+ "dococ-quant",
  "dococ-risk",
  "dococ-venue",
 ]

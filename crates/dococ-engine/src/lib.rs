@@ -1,6 +1,7 @@
 use dococ_core::{Account, Bar, Clock, Event, FixedClock, Instrument, Order, Side, Symbol};
 use dococ_laya::{ActionValidation, LayaRuntime, ModelCache, OrderAction, validate_action};
 use dococ_oms::OrderManager;
+use dococ_quant::GarchParams;
 use dococ_risk::{AccountState, PositionSizer, RiskConfig, RiskGuardian, SizingConfig};
 use dococ_venue::{SimVenue, Venue};
 
@@ -131,9 +132,13 @@ pub struct Engine<S: Strategy> {
     account: Account,
     scheduler: Scheduler,
     llm_brief: Option<String>,
+    llm_brief_as_of: i64,
     llm_brief_stale: bool,
     timeout: InferenceTimeout,
     model_cache: ModelCache,
+    garch_params: Option<GarchParams>,
+    return_buffer: Vec<f64>,
+    last_close: Option<f64>,
 }
 
 impl<S: Strategy> Engine<S> {
@@ -153,9 +158,13 @@ impl<S: Strategy> Engine<S> {
             account,
             scheduler,
             llm_brief: None,
+            llm_brief_as_of: 0,
             llm_brief_stale: true,
             timeout: InferenceTimeout::default(),
             model_cache: ModelCache::new(2),
+            garch_params: None,
+            return_buffer: Vec::new(),
+            last_close: None,
         }
     }
 
@@ -208,12 +217,20 @@ impl<S: Strategy> Engine<S> {
             OrderAction::NoAction => "NO_ACTION",
             OrderAction::Close => "CLOSE",
         };
-        let action =
+        let mut action =
             if dococ_laya::validate_action(action_str) == dococ_laya::ActionValidation::Valid {
                 action
             } else {
                 OrderAction::NoAction
             };
+
+        // Gate 4: when an intel brief has been received, a stale brief blocks new entries.
+        if self.llm_brief_as_of > 0
+            && self.llm_brief_stale
+            && matches!(action, OrderAction::Long | OrderAction::Short)
+        {
+            action = OrderAction::NoAction;
+        }
 
         // Get confidence from the strategy (Laya action_confidence).
 
@@ -262,7 +279,7 @@ impl<S: Strategy> Engine<S> {
             .unwrap_or(0.0);
 
         // Sizing: volatility target + confidence + guardian headroom.
-        let vol = 0.02; // placeholder; in production, use GARCH forecast
+        let vol = self.update_volatility(bar.close);
         let headroom = self.account.equity * 1.0; // 1x notional cap
         let sized_qty = self
             .sizer
@@ -287,11 +304,9 @@ impl<S: Strategy> Engine<S> {
         };
         self.execute_to_target(symbol, exec_target, bar.close, now);
 
-        // Update LLM brief staleness.
-        if let Some(brief_time) = self.llm_brief.as_ref().map(|_| now) {
-            if now - brief_time > 1800 {
-                self.llm_brief_stale = true;
-            }
+        // Update LLM brief staleness (stale > 30 min).
+        if self.llm_brief_as_of > 0 && now - self.llm_brief_as_of > 1800 {
+            self.llm_brief_stale = true;
         }
 
         Ok(Some(TickResult {
@@ -302,10 +317,16 @@ impl<S: Strategy> Engine<S> {
         }))
     }
 
-    /// Process an LLM brief arrival.
+    /// Process an LLM brief arrival. `timestamp` is the brief's as-of time.
     pub fn on_llm_brief(&mut self, brief: String, timestamp: i64) {
+        self.on_llm_brief_with_staleness(brief, timestamp, false);
+    }
+
+    /// Process an LLM brief with explicit staleness (e.g. fallback briefs).
+    pub fn on_llm_brief_with_staleness(&mut self, brief: String, timestamp: i64, stale: bool) {
         self.llm_brief = Some(brief);
-        self.llm_brief_stale = false;
+        self.llm_brief_as_of = timestamp;
+        self.llm_brief_stale = stale;
     }
 
     /// Check if LLM brief is stale.
@@ -385,6 +406,43 @@ impl<S: Strategy> Engine<S> {
         } else {
             self.account.positions.remove(symbol);
         }
+    }
+
+    /// Set GARCH parameters for volatility-based sizing.
+    pub fn set_garch_params(&mut self, params: GarchParams) {
+        self.garch_params = Some(params);
+    }
+
+    fn update_volatility(&mut self, close: f64) -> f64 {
+        if let Some(prev) = self.last_close {
+            if prev > 0.0 && close > 0.0 {
+                let ret = (close / prev).ln();
+                self.return_buffer.push(ret);
+                if self.return_buffer.len() > 500 {
+                    let drain = self.return_buffer.len() - 500;
+                    self.return_buffer.drain(0..drain);
+                }
+            }
+        }
+        self.last_close = Some(close);
+        if self.return_buffer.len() < 20 {
+            return 0.02;
+        }
+        if let Some(params) = &self.garch_params {
+            let vols = dococ_quant::garch_volatility(&self.return_buffer, params);
+            if let Some(v) = vols.last().copied() {
+                if v.is_finite() && v > 1e-8 {
+                    return v.clamp(0.001, 0.50);
+                }
+            }
+        }
+        // Fallback: realized vol (annualized from 1h bars).
+        let n = self.return_buffer.len().min(100);
+        let slice = &self.return_buffer[self.return_buffer.len() - n..];
+        let mean = slice.iter().sum::<f64>() / n as f64;
+        let var = slice.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (n - 1).max(1) as f64;
+        let rv = var.sqrt().max(1e-8);
+        rv.clamp(0.001, 0.50)
     }
 
     /// Run a CPU-heavy decision task off the event loop using spawn_blocking.
