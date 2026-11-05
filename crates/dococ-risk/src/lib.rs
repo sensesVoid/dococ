@@ -123,6 +123,9 @@ impl RiskGuardian {
     }
 }
 
+mod sizing;
+pub use sizing::*;
+
 #[cfg(test)]
 mod tests {
     use super::*;
