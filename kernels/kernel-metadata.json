@@ -1,7 +1,7 @@
 {
-  "id": "sensesvoid/dococ-smoke-test",
-  "title": "Doc Oc Smoke Test",
-  "code_file": "smoke_test.py",
+  "id": "sensesvoid/doc-oc-finetune-smoke",
+  "title": "Doc Oc Finetune Smoke",
+  "code_file": "finetune_smoke.py",
   "language": "python",
   "kernel_type": "script",
   "is_private": true,

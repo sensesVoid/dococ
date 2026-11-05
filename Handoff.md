@@ -81,11 +81,11 @@ None. The user accepted the token exposure and chose to leave the existing token
 ### Phase 0 spikes
 
 - [x] Laya ONNX/Rust parity, latency, and memory (parity PASS; latency ~5.2-5.6 s, peak RSS ~1.5 GB).
-- [~] Fine-tune one BTC checkpoint; export ONNX; parity test (export done; fine-tune pending).
-- [~] Causal teacher backtest on BTC; cost model (v1 beats costs; needs improvement).
+- [~] Fine-tune one BTC checkpoint; export ONNX; parity test (export done; fine-tune pending on Kaggle).
+- [~] Causal teacher backtest on BTC; cost model (v1 beats costs; needs improvement in Phase 1).
 - [x] `opencode run` JSON reliability and prompt-injection test.
 - [x] Free-first data and news ingestion.
-- [ ] Linux VPS benchmark.
+- [ ] Linux VPS benchmark (guide written; provisioning needs user action).
 
 ### External decisions deferred to live gating
 
