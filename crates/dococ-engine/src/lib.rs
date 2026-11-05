@@ -156,10 +156,11 @@ impl<S: Strategy> Engine<S> {
 
         // Run strategy with timing check.
         let start = std::time::Instant::now();
-        let action = self.strategy.decide(&state)?;
+        let mut action = self.strategy.decide(&state)?;
         let elapsed = start.elapsed();
         if elapsed.as_millis() as u64 > self.timeout.infer_ms {
-            // Inference took too long; log and continue with the result anyway.
+            // Inference took too long; fall back to NO_ACTION to prevent trading on stale state.
+            action = OrderAction::NoAction;
         }
 
         // Validate action; invalid actions become NO_ACTION.
@@ -253,6 +254,14 @@ impl<S: Strategy> Engine<S> {
     }
 
     /// Get the venue.
+    /// Run a CPU-heavy decision task off the event loop using spawn_blocking.
+    pub fn decide_blocking<F>(f: F, timeout_ms: u64) -> Result<OrderAction, &'static str>
+    where
+        F: FnOnce() -> OrderAction + Send + 'static,
+    {
+        spawn_blocking(f, std::time::Duration::from_millis(timeout_ms))
+    }
+
     pub fn venue(&self) -> &SimVenue {
         &self.venue
     }
@@ -333,5 +342,28 @@ mod tests {
         let symbol = Symbol::new("BTCUSDT");
         let result = engine.on_bar(&bar, &symbol).expect("tick");
         assert!(result.is_some());
+    }
+
+    struct DummyStrategy;
+    impl Strategy for DummyStrategy {
+        fn name(&self) -> &str { "dummy" }
+        fn decide(&mut self, _state: &str) -> Result<OrderAction, Box<dyn std::error::Error>> {
+            Ok(OrderAction::Hold)
+        }
+    }
+
+    #[test]
+    fn engine_decide_blocking_runs_off_thread() {
+        let res = Engine::<DummyStrategy>::decide_blocking(|| OrderAction::Long, 1000);
+        assert_eq!(res, Ok(OrderAction::Long));
+
+        let timeout_res = Engine::<DummyStrategy>::decide_blocking(
+            || {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                OrderAction::Short
+            },
+            10,
+        );
+        assert_eq!(timeout_res, Err("timeout"));
     }
 }
