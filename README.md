@@ -33,6 +33,14 @@ The ONNX artifacts are not published on HuggingFace yet. Export them locally:
 
 The output lands in `models/laya/multilingual/`. The script expects `.venv-laya` with the export dependencies installed.
 
+## Performance
+
+```powershell
+.\scripts\run_laya_bench.ps1 -Threads 4 -Reps 10 -N 5
+```
+
+Record load time, warm latency, and peak RSS for context lengths 512, 1024, and 2048. The first single-thread run on this laptop measured about 5.5 s per decision for a ~550-token state, with a peak RSS of about 1.5 GB.
+
 ## Design
 
 - `Design_Document.md`

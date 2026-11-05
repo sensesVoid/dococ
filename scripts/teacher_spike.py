@@ -70,10 +70,10 @@ def rolling_garch(returns_pct: pd.Series, window: int, refit_every: int, horizon
     return pd.Series(vol, index=returns_pct.index, name="garch_vol")
 
 
-def rolling_hmm(features: pd.DataFrame, window: int, refit_every: int) -> pd.DataFrame:
+def rolling_hmm(features: pd.DataFrame, window: int, refit_every: int, n_components: int) -> pd.DataFrame:
     values = features.to_numpy(dtype=float)
     n = len(values)
-    posteriors = np.full((n, 3), np.nan)
+    posteriors = np.full((n, n_components), np.nan)
 
     for end in range(window - 1, n, refit_every):
         train = values[end - window + 1 : end + 1]
@@ -85,7 +85,7 @@ def rolling_hmm(features: pd.DataFrame, window: int, refit_every: int) -> pd.Dat
         standardized = (train - mean) / scale
         try:
             model = GaussianHMM(
-                n_components=3,
+                n_components=n_components,
                 covariance_type="diag",
                 n_iter=100,
                 tol=1e-3,
@@ -93,21 +93,32 @@ def rolling_hmm(features: pd.DataFrame, window: int, refit_every: int) -> pd.Dat
             )
             model.fit(standardized)
             last = model.predict_proba(standardized)[-1]
-            # Label states by their mean log-return: low -> down, high -> up.
             order = np.argsort(model.means_[:, 0])
-            mapped = np.zeros(3)
+            mapped = np.zeros(n_components)
             for rank, state in enumerate(order):
                 mapped[rank] = last[state]
             posteriors[end] = mapped
         except Exception as exc:  # noqa: BLE001
             print(f"hmm fit failed at {end}: {exc}", file=sys.stderr)
 
-    frame = pd.DataFrame(
-        posteriors,
-        index=features.index,
-        columns=["p_down", "p_range", "p_up"],
-    )
-    return frame.ffill()
+    if n_components == 2:
+        frame = pd.DataFrame(
+            posteriors,
+            index=features.index,
+            columns=["p_down", "p_up"],
+        )
+        frame["p_range"] = 0.0
+    else:
+        frame = pd.DataFrame(
+            posteriors,
+            index=features.index,
+            columns=[f"p_state_{i}" for i in range(n_components)],
+        )
+        frame["p_down"] = frame.iloc[:, 0]
+        frame["p_up"] = frame.iloc[:, -1]
+        frame["p_range"] = frame.iloc[:, 1:-1].sum(axis=1)
+
+    return frame[["p_down", "p_range", "p_up"]].ffill()
 
 
 def sigmoid(value: np.ndarray) -> np.ndarray:
@@ -121,6 +132,8 @@ def build_signals(
     horizon: int,
     cost_round_trip: float,
     temperature: float,
+    entry_threshold: float,
+    vol_quantile: float,
 ) -> pd.DataFrame:
     work = frame.copy()
     work["garch_vol"] = garch_vol
@@ -129,13 +142,13 @@ def build_signals(
     work["mom_72"] = work["close"].pct_change(72)
 
     volatility = work["garch_vol"].clip(lower=1e-9)
-    work["trend_z"] = 0.6 * work["mom_24"] / volatility + 0.4 * work["mom_72"] / (
+    work["trend_z"] = 0.7 * work["mom_24"] / volatility + 0.3 * work["mom_72"] / (
         volatility * math.sqrt(3.0)
     )
     work["regime_z"] = work["p_up"] - work["p_down"]
-    work["edge"] = 0.5 * work["trend_z"] + 0.5 * work["regime_z"]
+    work["edge"] = 0.7 * work["trend_z"] + 0.3 * work["regime_z"]
     work["cost_z"] = cost_round_trip / volatility
-    work["net_edge"] = work["edge"] - work["cost_z"]
+    work["net_edge"] = work["edge"] - 0.5 * work["cost_z"]
 
     logits = np.column_stack(
         [
@@ -151,13 +164,18 @@ def build_signals(
     work["p_short"] = probabilities[:, 1]
     work["p_no_action"] = probabilities[:, 2]
 
+    vol_cutoff = work["garch_vol"].quantile(vol_quantile)
     work["signal"] = 0
     work.loc[
-        (work["p_long"] > work["p_short"] + 0.10) & (work["p_long"] > 0.40),
+        (work["p_long"] > work["p_short"] + 0.05)
+        & (work["p_long"] > entry_threshold)
+        & (work["garch_vol"] <= vol_cutoff),
         "signal",
     ] = 1
     work.loc[
-        (work["p_short"] > work["p_long"] + 0.10) & (work["p_short"] > 0.40),
+        (work["p_short"] > work["p_long"] + 0.05)
+        & (work["p_short"] > entry_threshold)
+        & (work["garch_vol"] <= vol_cutoff),
         "signal",
     ] = -1
 
@@ -209,7 +227,10 @@ def main() -> None:
     parser.add_argument("--horizon", type=int, default=24)
     parser.add_argument("--fee-bps", type=float, default=5.0)
     parser.add_argument("--slippage-bps", type=float, default=1.0)
-    parser.add_argument("--temperature", type=float, default=2.0)
+    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--hmm-states", type=int, default=2)
+    parser.add_argument("--entry-threshold", type=float, default=0.50)
+    parser.add_argument("--vol-quantile", type=float, default=0.95)
     parser.add_argument("--max-bars", type=int, default=None)
     args = parser.parse_args()
 
@@ -233,7 +254,7 @@ def main() -> None:
         args.refit_every,
         args.horizon,
     )
-    regimes = rolling_hmm(features, args.window, args.refit_every)
+    regimes = rolling_hmm(features, args.window, args.refit_every, args.hmm_states)
 
     cost_per_side = (args.fee_bps + args.slippage_bps) / 10_000.0
     cost_round_trip = 2.0 * cost_per_side
@@ -245,6 +266,8 @@ def main() -> None:
         args.horizon,
         cost_round_trip,
         args.temperature,
+        args.entry_threshold,
+        args.vol_quantile,
     )
     work = work.dropna(
         subset=[
