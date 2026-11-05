@@ -42,12 +42,21 @@ pub trait Venue {
     fn equity(&self) -> f64;
 }
 
+#[derive(Debug, Clone)]
+pub struct StopOrder {
+    pub symbol: String,
+    pub side: Side,
+    pub quantity: f64,
+    pub stop_price: f64,
+}
+
 pub struct SimVenue {
     equity: f64,
     slippage_bps: f64,
     prices: HashMap<String, f64>,
     positions: HashMap<String, Position>,
     next_order_id: u64,
+    stop_orders: Vec<StopOrder>,
 }
 
 impl SimVenue {
@@ -58,11 +67,93 @@ impl SimVenue {
             prices: HashMap::new(),
             positions: HashMap::new(),
             next_order_id: 1,
+            stop_orders: Vec::new(),
         }
     }
 
     pub fn set_price(&mut self, symbol: &str, price: f64) {
         self.prices.insert(symbol.to_string(), price);
+    }
+
+    pub fn set_stop(&mut self, symbol: &str, side: Side, quantity: f64, stop_price: f64) {
+        self.stop_orders.push(StopOrder {
+            symbol: symbol.to_string(),
+            side,
+            quantity,
+            stop_price,
+        });
+    }
+
+    pub fn cancel_stops(&mut self, symbol: &str) {
+        self.stop_orders.retain(|s| s.symbol != symbol);
+    }
+
+    pub fn check_stops(&mut self, symbol: &str, current_price: f64) -> Vec<Fill> {
+        let mut fills = Vec::new();
+        let mut triggered = Vec::new();
+
+        for (i, stop) in self.stop_orders.iter().enumerate() {
+            if stop.symbol != symbol {
+                continue;
+            }
+            let trigger = match stop.side {
+                Side::Sell => current_price <= stop.stop_price,
+                Side::Buy => current_price >= stop.stop_price,
+            };
+            if trigger {
+                triggered.push(i);
+            }
+        }
+
+        // Process triggered stops (in reverse order to maintain indices).
+        for &i in triggered.iter().rev() {
+            let stop = self.stop_orders.remove(i);
+            let fill_price = self.fill_price(stop.side, current_price);
+            let order_id = self.next_order_id;
+            self.next_order_id += 1;
+
+            let fill = Fill {
+                order_id,
+                symbol: stop.symbol.clone(),
+                side: stop.side,
+                quantity: stop.quantity,
+                price: fill_price,
+            };
+
+            // Update position.
+            let position = self.positions.entry(stop.symbol.clone()).or_insert(Position {
+                symbol: stop.symbol.clone(),
+                quantity: 0.0,
+                avg_price: 0.0,
+            });
+
+            let signed_qty = match stop.side {
+                Side::Buy => stop.quantity,
+                Side::Sell => -stop.quantity,
+            };
+
+            if position.quantity == 0.0 {
+                position.avg_price = fill_price;
+            } else {
+                let total_qty = position.quantity + signed_qty;
+                if total_qty != 0.0 {
+                    position.avg_price = (position.avg_price * position.quantity
+                        + fill_price * signed_qty)
+                        / total_qty;
+                }
+            }
+            position.quantity += signed_qty;
+
+            let cost = fill_price * stop.quantity;
+            match stop.side {
+                Side::Buy => self.equity -= cost,
+                Side::Sell => self.equity += cost,
+            }
+
+            fills.push(fill);
+        }
+
+        fills
     }
 
     fn fill_price(&self, side: Side, price: f64) -> f64 {
@@ -186,6 +277,8 @@ impl CostModel {
 }
 
 #[cfg(test)]
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -277,5 +370,41 @@ mod tests {
         let cost1 = model.estimate(1.0, 64_000.0, 5.0, 1.0);
         let cost2 = model.estimate(2.0, 64_000.0, 5.0, 1.0);
         assert!((cost2.total - cost1.total * 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn stop_loss_triggers_on_price_drop() {
+        let mut venue = SimVenue::new(100_000.0, 5.0);
+        venue.set_price("BTCUSDT", 64_000.0);
+        let buy = Order {
+            symbol: "BTCUSDT".into(),
+            side: Side::Buy,
+            quantity: 0.1,
+            order_type: OrderType::Market,
+        };
+        venue.submit(buy).expect("buy");
+        venue.set_stop("BTCUSDT", Side::Sell, 0.1, 62_000.0);
+        let fills = venue.check_stops("BTCUSDT", 61_000.0);
+        assert_eq!(fills.len(), 1);
+        assert_eq!(fills[0].side, Side::Sell);
+    }
+
+    #[test]
+    fn stop_loss_does_not_trigger_above_stop() {
+        let mut venue = SimVenue::new(100_000.0, 5.0);
+        venue.set_price("BTCUSDT", 64_000.0);
+        venue.set_stop("BTCUSDT", Side::Sell, 0.1, 62_000.0);
+        let fills = venue.check_stops("BTCUSDT", 63_000.0);
+        assert!(fills.is_empty());
+    }
+
+    #[test]
+    fn cancel_stop_removes_it() {
+        let mut venue = SimVenue::new(100_000.0, 5.0);
+        venue.set_price("BTCUSDT", 64_000.0);
+        venue.set_stop("BTCUSDT", Side::Sell, 0.1, 62_000.0);
+        venue.cancel_stops("BTCUSDT");
+        let fills = venue.check_stops("BTCUSDT", 61_000.0);
+        assert!(fills.is_empty());
     }
 }
