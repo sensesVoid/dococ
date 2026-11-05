@@ -55,3 +55,7 @@ export_ml*.txt
 shadow_*.json
 
 paper_*.json
+
+paper_*.state.json
+paper_*.bak
+paper_*.json.bak

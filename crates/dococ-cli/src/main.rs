@@ -52,6 +52,9 @@ enum Commands {
         /// Poll interval in seconds when --loop is set
         #[arg(long, default_value_t = 300)]
         interval: u64,
+        /// Ignore saved sim state and start fresh
+        #[arg(long)]
+        fresh: bool,
     },
     /// Run shadow mode: log decisions without placing orders
     Shadow {
@@ -72,6 +75,12 @@ enum Commands {
     /// Open the dashboard skeleton (ratatui)
     Dash {
         /// Asset symbol to show (reads paper_<asset>.json if present)
+        #[arg(default_value = "BTCUSDT")]
+        asset: String,
+    },
+    /// Print metrics report from a paper journal
+    Report {
+        /// Asset symbol (reads paper_<asset>.json)
         #[arg(default_value = "BTCUSDT")]
         asset: String,
     },
@@ -149,20 +158,89 @@ fn main() {
             bars: n_bars,
             r#loop,
             interval,
+            fresh,
         }) => {
             let model_dir = std::env::var("DOCOC_LAYA_MODEL")
                 .unwrap_or_else(|_| "models/btcusdt_ml".to_string());
             let symbol = asset.to_uppercase();
             let out = std::path::PathBuf::from(format!("paper_{}.json", symbol.to_lowercase()));
+            let state_path =
+                std::path::PathBuf::from(format!("paper_{}.state.json", symbol.to_lowercase()));
             println!(
-                "Paper trading: {} (model: {}, bars: {}, loop: {}, interval: {}s)",
-                symbol, model_dir, n_bars, r#loop, interval
+                "Paper trading: {} (model: {}, bars: {}, loop: {}, interval: {}s, fresh: {})",
+                symbol, model_dir, n_bars, r#loop, interval, fresh
             );
             match dococ_laya::LayaRuntime::load(&model_dir) {
                 Ok(laya) => {
                     let strategy = dococ_engine::LayaStrategy::new(laya);
-                    let venue = dococ_venue::SimVenue::new(100_000.0, 5.0);
-                    let account = dococ_core::Account::new(dococ_core::AccountId(1), 100_000.0);
+                    let slippage_bps = 5.0;
+                    // Try to restore sim state for cross-process continuity.
+                    let restored = if !fresh {
+                        std::fs::read_to_string(&state_path)
+                            .ok()
+                            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+                    } else {
+                        None
+                    };
+                    let (venue, mut account, restored_ok) = if let Some(st) = restored {
+                        let cash = st["cash"].as_f64().unwrap_or(100_000.0);
+                        let next_id = st["next_order_id"].as_u64().unwrap_or(1);
+                        let peak = st["account_peak_equity"].as_f64().unwrap_or(100_000.0);
+                        let mut positions = std::collections::HashMap::new();
+                        let mut prices = std::collections::HashMap::new();
+                        if let Some(pos_obj) = st["positions"].as_object() {
+                            for (sym, p) in pos_obj {
+                                positions.insert(
+                                    sym.clone(),
+                                    dococ_venue::Position {
+                                        symbol: sym.clone(),
+                                        quantity: p["quantity"].as_f64().unwrap_or(0.0),
+                                        avg_price: p["avg_price"].as_f64().unwrap_or(0.0),
+                                    },
+                                );
+                            }
+                        }
+                        if let Some(pr_obj) = st["prices"].as_object() {
+                            for (sym, p) in pr_obj {
+                                if let Some(v) = p.as_f64() {
+                                    prices.insert(sym.clone(), v);
+                                }
+                            }
+                        }
+                        let venue =
+                            dococ_venue::SimVenue::restore(cash, slippage_bps, positions.clone(), prices, next_id);
+                        let mut account =
+                            dococ_core::Account::new(dococ_core::AccountId(1), 100_000.0);
+                        account.peak_equity = peak;
+                        for (sym, p) in &positions {
+                            if p.quantity.abs() > 1e-12 {
+                                let cs = dococ_core::Symbol::new(sym);
+                                let mut cp = dococ_core::Position::new(cs.clone());
+                                cp.quantity = p.quantity;
+                                cp.avg_price = p.avg_price;
+                                account.positions.insert(cs, cp);
+                            }
+                        }
+                        account.equity = venue.equity_mtm();
+                        account.update_peak();
+                        println!("Restored sim state from {}", state_path.display());
+                        (venue, account, true)
+                    } else {
+                        if fresh && (out.exists() || state_path.exists()) {
+                            let _ = std::fs::rename(&out, out.with_extension("json.bak"));
+                            let _ = std::fs::rename(&state_path, state_path.with_extension("json.bak"));
+                            println!("Backed up previous paper journal/state (--fresh)");
+                        } else if !fresh && (out.exists() || state_path.exists()) {
+                            // No valid state but artifacts exist: start clean session to avoid
+                            // inconsistent replay; preserve artifacts.
+                            let _ = std::fs::rename(&out, out.with_extension("json.bak"));
+                            let _ = std::fs::rename(&state_path, state_path.with_extension("json.bak"));
+                            println!("No valid state file; backed up artifacts and starting fresh session");
+                        }
+                        let venue = dococ_venue::SimVenue::new(100_000.0, slippage_bps);
+                        let account = dococ_core::Account::new(dococ_core::AccountId(1), 100_000.0);
+                        (venue, account, false)
+                    };
                     let scheduler = dococ_engine::Scheduler::new(900, 1);
                     let mut engine = dococ_engine::Engine::new(
                         strategy,
@@ -172,20 +250,21 @@ fn main() {
                         scheduler,
                     );
                     let sym = dococ_core::Symbol::new(&symbol);
-                    // Load existing journal and resume idempotently by timestamp.
-                    let mut journal: Vec<serde_json::Value> = std::fs::read_to_string(&out)
-                        .ok()
-                        .and_then(|t| serde_json::from_str(&t).ok())
-                        .unwrap_or_default();
+                    // Load journal for idempotency (append when restored; fresh session starts empty).
+                    let mut journal: Vec<serde_json::Value> = if restored_ok {
+                        std::fs::read_to_string(&out)
+                            .ok()
+                            .and_then(|t| serde_json::from_str(&t).ok())
+                            .unwrap_or_default()
+                    } else {
+                        Vec::new()
+                    };
                     let mut seen: std::collections::HashSet<i64> = journal
                         .iter()
                         .filter_map(|v| v.get("timestamp").and_then(|t| t.as_i64()))
                         .collect();
-                    if !journal.is_empty() {
-                        println!(
-                            "Note: loaded {} journal row(s) for timestamp idempotency; sim state starts fresh (continuous state requires --loop in one process).",
-                            journal.len()
-                        );
+                    if restored_ok && !journal.is_empty() {
+                        println!("Loaded {} journal row(s) (idempotent resume)", journal.len());
                     }
                     loop {
                         let bars = dococ_venue::live::fetch_latest(&symbol, n_bars).unwrap_or_default();
@@ -238,14 +317,41 @@ fn main() {
                             &out,
                             serde_json::to_string_pretty(&journal).unwrap_or_else(|_| "[]".to_string()),
                         );
+                        // Persist sim state for cross-process resume.
+                        let mut pos_map = serde_json::Map::new();
+                        let mut price_map = serde_json::Map::new();
+                        for (s, p) in dococ_venue::Venue::positions(engine.venue()) {
+                            pos_map.insert(
+                                s.clone(),
+                                serde_json::json!({"quantity": p.quantity, "avg_price": p.avg_price}),
+                            );
+                        }
+                        // Persist last known price for the traded symbol.
+                        if let Some(last) = bars.last() {
+                            price_map.insert(symbol.clone(), serde_json::json!(last.1));
+                        }
+                        let st = serde_json::json!({
+                            "symbol": symbol,
+                            "cash": engine.venue().cash(),
+                            "slippage_bps": slippage_bps,
+                            "next_order_id": engine.venue().next_order_id(),
+                            "positions": pos_map,
+                            "prices": price_map,
+                            "account_peak_equity": acct.peak_equity,
+                        });
+                        let _ = std::fs::write(
+                            &state_path,
+                            serde_json::to_string_pretty(&st).unwrap_or_else(|_| "{}".to_string()),
+                        );
                         println!(
-                            "Paper batch: +{} tick(s), total {}, equity {:.2}, DD {:.2}%, fills {}, journal {}",
+                            "Paper batch: +{} tick(s), total {}, equity {:.2}, DD {:.2}%, fills {}, journal {}, state {}",
                             ticks,
                             journal.len(),
                             acct.equity,
                             acct.drawdown() * 100.0,
                             engine.oms().filled_orders().len(),
-                            out.display()
+                            out.display(),
+                            state_path.display()
                         );
                         if !r#loop {
                             break;
@@ -357,6 +463,36 @@ fn main() {
             if let Err(e) = dococ_tui::run(&asset) {
                 eprintln!("Dashboard error: {e}");
             }
+        }
+        Some(Commands::Report { asset }) => {
+            let symbol = asset.to_uppercase();
+            let path = format!("paper_{}.json", symbol.to_lowercase());
+            let text = match std::fs::read_to_string(&path) {
+                Ok(t) => t,
+                Err(_) => {
+                    println!("No paper journal found: {}", path);
+                    return;
+                }
+            };
+            let rows: Vec<dococ_tui::JournalRow> =
+                serde_json::from_str(&text).unwrap_or_default();
+            let m = dococ_tui::compute_metrics(&rows);
+            let (equity, dd, pos) = rows
+                .last()
+                .map(|r| (r.equity, r.drawdown, r.position_qty))
+                .unwrap_or((0.0, 0.0, 0.0));
+            println!("Doc Oc paper report: {}", symbol);
+            println!("  Decisions:    {}", rows.len());
+            println!("  Trades:       {}", m.trades);
+            println!("  Equity:       {:.2}", equity);
+            println!("  Position:     {:.4}", pos);
+            println!("  Return:       {:+.2}%", m.total_return_pct);
+            println!("  Max drawdown: {:.2}%", m.max_drawdown_pct);
+            println!("  Drawdown now: {:.2}%", dd * 100.0);
+            println!("  Sharpe (ann.): {:.2}", m.sharpe);
+            println!("  Win rate:     {:.1}%", m.win_rate);
+            println!("  Avg conf:     {:.3}", m.avg_confidence);
+            println!("  Journal:      {}", path);
         }
         Some(Commands::Version) | None => {
             println!("dococ 0.1.0 (Phase 1)");

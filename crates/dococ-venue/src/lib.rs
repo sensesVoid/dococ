@@ -240,6 +240,34 @@ impl Venue for SimVenue {
 }
 
 impl SimVenue {
+    /// Internal cash balance (full-notional accounting field). Prefer
+    /// `equity_mtm()` for mark-to-market valuation.
+    pub fn cash(&self) -> f64 {
+        self.equity
+    }
+
+    pub fn next_order_id(&self) -> u64 {
+        self.next_order_id
+    }
+
+    /// Restore a sim venue from a persisted snapshot.
+    pub fn restore(
+        cash: f64,
+        slippage_bps: f64,
+        positions: HashMap<String, Position>,
+        prices: HashMap<String, f64>,
+        next_order_id: u64,
+    ) -> Self {
+        Self {
+            equity: cash,
+            slippage_bps,
+            prices,
+            positions,
+            next_order_id,
+            stop_orders: Vec::new(),
+        }
+    }
+
     /// Mark-to-market equity: cash balance plus open positions valued at
     /// current marks (falls back to avg_price when no mark is set).
     /// Note: the base `equity` field is debited/credited by full notional on
