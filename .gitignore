@@ -36,3 +36,9 @@ data/dataset_btc/kaggle/
 kernels_out/
 
 kernels_btc/
+
+# Agent context and local tooling (kept local, never pushed)
+.agent_context/
+AGENTS.md
+.codegraph/
+.freebuff/
