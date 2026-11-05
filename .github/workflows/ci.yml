@@ -16,3 +16,10 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace
+      # Golden fixture integrity (always) + quant parity fixtures run above.
+      # The ONNX parity test (tests/golden.rs::golden_parity_with_python) is
+      # #[ignore]d: /models/ is gitignored, so it runs locally with
+      # DOCOC_LAYA_MODEL set, e.g.:
+      #   $env:DOCOC_LAYA_MODEL = "$PWD/models/laya/multilingual"
+      #   cargo test -p dococ-laya --test golden -- --ignored
+      - run: cargo test -p dococ-laya --test golden golden_fixture_values_are_sane

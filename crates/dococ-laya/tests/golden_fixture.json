@@ -1,0 +1,10 @@
+{
+  "state": "Account: paper. Equity 100000 USD. Position: flat.\nMarket: BTC/USDT perpetual. Last price 64000. 4h trend: up.\nGARCH conditional volatility: 0.012. Markov regime: trending.\nNews: spot ETF inflows positive; funding neutral.",
+  "expected": {
+    "action": "Hold",
+    "action_confidence": 0.5918,
+    "edge_probability": 0.8116,
+    "conviction": 1.1479
+  },
+  "tolerance": 0.01
+}

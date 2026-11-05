@@ -108,7 +108,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema, `validate_action`, invalid-action-as-NO_ACTION handling in engine tick, and strategy confidence pass-through done.)
 - [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya. (`PositionSizer` wired into engine tick; `open_notional` now computed from account positions. Vol forecast still placeholder 0.02 pending GARCH wiring.)
 - [x] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry, SHA-256 verification, atomic model switch, and rollback support done.)
-- [ ] Python/Rust golden tests in CI.
+- [x] Python/Rust golden tests in CI. (Laya: `crates/dococ-laya/tests/golden_fixture.json` + `golden.rs` — fixture integrity always runs; ONNX parity test is `#[ignore]`d and needs `DOCOC_LAYA_MODEL` since `/models/` is gitignored. Quant: GARCH/Markov/teacher parity fixtures run in CI via `cargo test`.)
 
 **Gate 3:** BTC runs end-to-end in replay with a fine-tuned checkpoint; state never exceeds the token budget; invalid actions are logged and treated as NO_ACTION; p95 under 2 seconds.
 
