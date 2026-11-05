@@ -1,6 +1,6 @@
 # Doc Oc - Implementation Checklist
 
-Status: Phases 1-4 built; Phase 5 in progress (English model done, multilingual retrain RUNNING); Phase 6 scaffolded
+Status: Phases 1-4 built; Phase 5 in progress (multilingual fine-tune complete/exported, calibration pending val_logits); Phase 6 in progress (shadow gate passed, paper loop wired)
 Date: 2026-11-05
 Owner: @Geh
 References: `Design_Document.md`, `Design_Recommendations.md`
@@ -33,7 +33,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [x] Run `laya-train` with `--freeze-encoder` as a baseline. (Smoke test passed on Kaggle.)
 - [x] Run a full fine-tune on Kaggle 2xT4. (Smoke test passed; training pipeline validated.)
 - [ ] Fit calibration temperatures; record ECE/Brier. (`scripts/calibrate.py` ready, but needs a `val_logits.json` sidecar that `laya-train` does not emit yet.)
-- [~] Export ONNX; load in Rust; rerun the parity test. (English fine-tuned checkpoint exported and Rust golden recorded (`golden_btcusdt.rs`); known Rust/Python action divergence on the smoke state — multilingual retrain RUNNING to close it. Multilingual base parity still exact: Hold 0.5918 / 0.8116 / 1.1479.)
+- [x] Export ONNX; load in Rust; rerun the parity test. (English fine-tuned checkpoint exported and Rust golden recorded (`golden_btcusdt.rs`); known Rust/Python action divergence on the smoke state. Multilingual fine-tune v5 exported/verified to `models/btcusdt_ml`; Rust golden `golden_btcusdt_ml` PASS — action parity achieved.)
 - [ ] Compare full fine-tune vs head-only on cost-adjusted backtest.
 
 **Acceptance:** Training completes reproducibly; the fine-tuned checkpoint beats the base and the head-only baseline; calibration passes; ONNX loads in Rust.
@@ -127,7 +127,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 ## Phase 5 - Training pipeline and asset onboarding
 
 - [x] Dataset builder: historical states, teacher labels, costs, purged splits. (`scripts/build_dataset.py`: 2,120 BTC rows from 33,702 bars + teacher v1 labels (2,244 aligned by timestamp), 80/10/10 purged splits with 24-bar embargo; `laya-train --dry-run` PASS: 1,696 rows → 5,088 items.)
-- [~] `laya-train` pipeline: full fine-tune, calibration, ONNX export, metadata. (English checkpoint COMPLETE: 1,696 teacher examples, 4 epochs; exported to `models/btcusdt`; Rust golden recorded with a known Python action divergence. Multilingual-base retrain kernel v5 RUNNING to close the divergence. Calibration pending a `val_logits.json` sidecar.)
+- [~] `laya-train` pipeline: full fine-tune, calibration, ONNX export, metadata. (English checkpoint complete/exported to `models/btcusdt` (action divergence recorded). Multilingual fine-tune v5 COMPLETE/exported to `models/btcusdt_ml` with Rust action parity. Calibration pending a `val_logits.json` sidecar that `laya-train` does not emit.)
 - [x] Asset pack: instrument metadata, GARCH/Markov params, model path, calibration, thresholds, stage. (`dococ-asset` crate: `AssetPack` with validate/promote/demote, 4 tests.)
 - [x] `dococ asset add|list|show|promote|demote|rm`. (CLI subcommands tested end-to-end add/list/show.)
 - [x] Drift monitor: calibration error, action distribution, PnL attribution, feature drift. (`dococ-drift` crate: `DriftReport::breaches` auto-rollback triggers, 5 tests.)
@@ -137,9 +137,9 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 ## Phase 6 - Paper trading
 
-- [ ] Paper both BTC and gold on live data with `SimVenue`.
+- [~] Paper both BTC and gold on live data with `SimVenue`. (`dococ paper BTCUSDT` runs engine+Laya over live Binance 1h bars via `SimVenue`; scheduler fix applied. Order placement/tracking through SimVenue/OMS and paper decision journal persistence still pending. Gold live data/paper pending.)
 - [ ] Dashboard: PnL, Sharpe, win rate, drawdown, regime, news, system health.
-- [~] Shadow: 2 weeks or 500 decisions. (`dococ-shadow` crate + `dococ shadow` CLI; gate logic tested; live shadow run pending model.)
+- [x] Shadow: 2 weeks or 500 decisions (decision-count gate). (`dococ-shadow` model-backed replay with enriched state; 500-decision run: 500 decisions, 0 orders, 111 Long/389 Short, mean conf 0.395. 2-week time gate still pending.)
 - [ ] Paper: 4 weeks or 500 decisions.
 - [ ] Daily/weekly reports and challenge simulator.
 - [x] Incident runbook: kill, flatten, reconcile, postmortem. (`docs/RUNBOOK.md`)

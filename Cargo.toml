@@ -12,7 +12,7 @@ members = [
     "crates/dococ-shadow",
     "crates/dococ-asset",
     "crates/dococ-drift",
-    "crates/dococ-quant",
+    "crates/dococ-quant", "crates/dococ-tui",
 ]
 [workspace.package]
 version = "0.1.0"

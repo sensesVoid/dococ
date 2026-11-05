@@ -2,7 +2,7 @@ use dococ_core::{Account, Bar, Clock, Event, FixedClock, Instrument, Order, Side
 use dococ_laya::{ActionValidation, LayaRuntime, ModelCache, OrderAction, validate_action};
 use dococ_oms::OrderManager;
 use dococ_risk::{AccountState, PositionSizer, RiskConfig, RiskGuardian, SizingConfig};
-use dococ_venue::SimVenue;
+use dococ_venue::{SimVenue, Venue};
 
 /// Strategy interface: pluggable decision logic.
 /// Returns (action, confidence).
@@ -41,11 +41,20 @@ pub struct TargetPosition {
 }
 
 impl TargetPosition {
-    pub fn from_action(action: OrderAction, confidence: f64, max_qty: f64) -> Self {
+    /// Compute target quantity. `current_qty` is the signed current position
+    /// (positive=long, negative=short). HOLD/NO_ACTION maintain `current_qty`;
+    /// CLOSE flattens to 0.
+    pub fn from_action(
+        action: OrderAction,
+        confidence: f64,
+        max_qty: f64,
+        current_qty: f64,
+    ) -> Self {
         let target_qty = match action {
             OrderAction::Long => max_qty * confidence,
             OrderAction::Short => -max_qty * confidence,
-            OrderAction::Hold | OrderAction::NoAction | OrderAction::Close => 0.0,
+            OrderAction::Hold | OrderAction::NoAction => current_qty,
+            OrderAction::Close => 0.0,
         };
         Self {
             symbol: Symbol::new(""),
@@ -235,17 +244,38 @@ impl<S: Strategy> Engine<S> {
             dococ_risk::RiskDecision::Accept
         };
 
+        // Current signed position quantity.
+        let current_qty = self
+            .account
+            .get_position(symbol)
+            .map(|p| p.quantity)
+            .unwrap_or(0.0);
+
         // Sizing: volatility target + confidence + guardian headroom.
         let vol = 0.02; // placeholder; in production, use GARCH forecast
         let headroom = self.account.equity * 1.0; // 1x notional cap
         let sized_qty = self
             .sizer
             .size(self.account.equity, vol, confidence, bar.close, headroom);
-        let target_qty = match action {
+        let mut target_qty = match action {
             OrderAction::Long => sized_qty,
             OrderAction::Short => -sized_qty,
-            _ => 0.0,
+            OrderAction::Hold | OrderAction::NoAction => current_qty,
+            OrderAction::Close => 0.0,
         };
+
+        // Enforce risk decision and execute against the sim venue.
+        let exec_target = match risk_decision {
+            dococ_risk::RiskDecision::Accept => target_qty,
+            dococ_risk::RiskDecision::Reject(_) => current_qty,
+            dococ_risk::RiskDecision::Cap { max_quantity } => {
+                let cap = max_quantity.abs();
+                target_qty = target_qty.clamp(-cap, cap);
+                target_qty
+            }
+            dococ_risk::RiskDecision::Flatten => 0.0,
+        };
+        self.execute_to_target(symbol, exec_target, bar.close, now);
 
         // Update LLM brief staleness.
         if let Some(brief_time) = self.llm_brief.as_ref().map(|_| now) {
@@ -258,7 +288,7 @@ impl<S: Strategy> Engine<S> {
             action,
             action_confidence: confidence,
             risk_decision,
-            target_qty,
+            target_qty: exec_target,
         }))
     }
 
@@ -288,7 +318,65 @@ impl<S: Strategy> Engine<S> {
         &self.oms
     }
 
-    /// Get the venue.
+    /// Submit simulated market orders to move from the current venue position
+    /// to `target_qty` (signed: +long, -short, 0 flat). Records fills in the
+    /// OMS and syncs the core account from venue state.
+    fn execute_to_target(&mut self, symbol: &Symbol, target_qty: f64, price: f64, now: i64) {
+        self.venue.set_price(&symbol.0, price);
+        let current_qty = self
+            .venue
+            .positions()
+            .get(&symbol.0)
+            .map(|p| p.quantity)
+            .unwrap_or(0.0);
+        let delta = target_qty - current_qty;
+        if delta.abs() < 1e-9 {
+            self.sync_account_from_venue(symbol);
+            return;
+        }
+        let (side, qty) = if delta > 0.0 {
+            (dococ_venue::Side::Buy, delta)
+        } else {
+            (dococ_venue::Side::Sell, -delta)
+        };
+        let order = dococ_venue::Order {
+            symbol: symbol.0.clone(),
+            side,
+            quantity: qty,
+            order_type: dococ_venue::OrderType::Market,
+        };
+        if let Ok(fill) = self.venue.submit(order) {
+            let oms_side = match side {
+                dococ_venue::Side::Buy => dococ_oms::Side::Buy,
+                dococ_venue::Side::Sell => dococ_oms::Side::Sell,
+            };
+            let key = format!("paper:{now}:{}:{:?}", symbol.0, side);
+            let id = self.oms.create_order(&symbol.0, oms_side, qty, price, Some(&key));
+            if let Some(o) = self.oms.get_mut(id) {
+                o.mark_working();
+                o.fill(fill.quantity, fill.price);
+            }
+        }
+        self.sync_account_from_venue(symbol);
+    }
+
+    /// Sync core account equity and the given symbol's position from the sim venue.
+    fn sync_account_from_venue(&mut self, symbol: &Symbol) {
+        self.account.equity = self.venue.equity();
+        self.account.update_peak();
+        if let Some(vp) = self.venue.positions().get(&symbol.0) {
+            let pos = self
+                .account
+                .positions
+                .entry(symbol.clone())
+                .or_insert_with(|| dococ_core::Position::new(symbol.clone()));
+            pos.quantity = vp.quantity;
+            pos.avg_price = vp.avg_price;
+        } else {
+            self.account.positions.remove(symbol);
+        }
+    }
+
     /// Run a CPU-heavy decision task off the event loop using spawn_blocking.
     /// For async/external callers. The synchronous `on_bar` tick calls the
     /// strategy directly and enforces `InferenceTimeout` post-hoc (falls back
@@ -340,19 +428,25 @@ mod tests {
 
     #[test]
     fn target_position_long() {
-        let tp = TargetPosition::from_action(OrderAction::Long, 0.8, 1.0);
+        let tp = TargetPosition::from_action(OrderAction::Long, 0.8, 1.0, 0.0);
         assert!((tp.target_qty - 0.8).abs() < 1e-9);
     }
 
     #[test]
     fn target_position_short() {
-        let tp = TargetPosition::from_action(OrderAction::Short, 0.6, 1.0);
+        let tp = TargetPosition::from_action(OrderAction::Short, 0.6, 1.0, 0.0);
         assert!((tp.target_qty - (-0.6)).abs() < 1e-9);
     }
 
     #[test]
-    fn target_position_hold() {
-        let tp = TargetPosition::from_action(OrderAction::Hold, 0.9, 1.0);
+    fn target_position_hold_maintains() {
+        let tp = TargetPosition::from_action(OrderAction::Hold, 0.9, 1.0, 0.5);
+        assert!((tp.target_qty - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn target_position_close_flattens() {
+        let tp = TargetPosition::from_action(OrderAction::Close, 0.9, 1.0, 0.5);
         assert!((tp.target_qty - 0.0).abs() < 1e-9);
     }
 

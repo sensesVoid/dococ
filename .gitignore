@@ -53,3 +53,5 @@ kernels_out_ml*/
 export_ml*.txt
 
 shadow_*.json
+
+paper_*.json
