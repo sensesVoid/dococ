@@ -227,6 +227,9 @@ impl<S: Strategy> Engine<S> {
     }
 }
 
+mod replay;
+pub use replay::*;
+
 #[cfg(test)]
 mod tests {
     use super::*;
