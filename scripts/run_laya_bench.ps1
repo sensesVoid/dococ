@@ -2,6 +2,7 @@ param(
     [string]$Model = "C:\Users\geral\dococ\models\laya\multilingual",
     [int]$Reps = 10,
     [int]$N = 5,
+    [int]$Threads = 0,
     [string]$Exe = "target\release\examples\laya_bench.exe"
 )
 
@@ -19,6 +20,11 @@ $err = Join-Path $root "models\laya\bench.err"
 $env:DOCOC_LAYA_MODEL = $Model
 $env:DOCOC_LAYA_BENCH_REPS = "$Reps"
 $env:DOCOC_LAYA_BENCH_N = "$N"
+if ($Threads -gt 0) {
+    $env:DOCOC_LAYA_THREADS = "$Threads"
+} else {
+    Remove-Item Env:DOCOC_LAYA_THREADS -ErrorAction SilentlyContinue
+}
 
 $process = Start-Process -FilePath $exePath -PassThru -NoNewWindow `
     -RedirectStandardOutput $out -RedirectStandardError $err

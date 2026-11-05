@@ -22,7 +22,7 @@ impl OrderAction {
 
 use std::path::Path;
 
-use laya::{LayaEngine, Question, QuestionSet};
+use laya::{LayaEngine, LayaOptions, Question, QuestionSet};
 use serde_json::Value;
 
 #[derive(Debug, thiserror::Error)]
@@ -49,8 +49,20 @@ pub struct LayaRuntime {
 
 impl LayaRuntime {
     pub fn load(directory: impl AsRef<Path>) -> Result<Self, LayaDecisionError> {
+        Self::load_with_threads(directory, None)
+    }
+
+    pub fn load_with_threads(
+        directory: impl AsRef<Path>,
+        intra_op_threads: Option<u32>,
+    ) -> Result<Self, LayaDecisionError> {
+        let options = LayaOptions {
+            model_directory: Some(directory.as_ref().to_path_buf()),
+            intra_op_threads,
+            ..LayaOptions::default()
+        };
         Ok(Self {
-            engine: LayaEngine::from_directory(directory)?,
+            engine: LayaEngine::create(options)?,
         })
     }
 
@@ -140,6 +152,12 @@ mod tests {
     #[test]
     fn load_fails_for_missing_model_directory() {
         let result = LayaRuntime::load("definitely-not-a-model-directory");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_with_threads_fails_for_missing_model_directory() {
+        let result = LayaRuntime::load_with_threads("definitely-not-a-model-directory", Some(4));
         assert!(result.is_err());
     }
 }

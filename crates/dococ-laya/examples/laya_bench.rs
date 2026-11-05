@@ -15,6 +15,9 @@ News: spot ETF inflows positive; funding neutral.
 fn main() {
     let model_dir =
         std::env::var("DOCOC_LAYA_MODEL").expect("set DOCOC_LAYA_MODEL to the ONNX model directory");
+    let threads = std::env::var("DOCOC_LAYA_THREADS")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok());
     let repetitions = std::env::var("DOCOC_LAYA_BENCH_REPS")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
@@ -25,7 +28,7 @@ fn main() {
         .unwrap_or(5);
 
     let load_started = Instant::now();
-    let runtime = LayaRuntime::load(&model_dir).expect("load Laya model");
+    let runtime = LayaRuntime::load_with_threads(&model_dir, threads).expect("load Laya model");
     let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
 
     let state = state(repetitions);
@@ -55,8 +58,9 @@ fn main() {
     let p95 = timings[(timings.len() as f64 * 0.95).ceil() as usize - 1];
 
     println!(
-        "load_ms={:.1} state_chars={} reps={} n={} mean_ms={:.1} p50_ms={:.1} p95_ms={:.1}",
+        "load_ms={:.1} threads={:?} state_chars={} reps={} n={} mean_ms={:.1} p50_ms={:.1} p95_ms={:.1}",
         load_ms,
+        threads,
         state.chars().count(),
         repetitions,
         iterations,
