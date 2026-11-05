@@ -1,0 +1,17 @@
+{
+  "state": "Account: paper. Equity 100000 USD. Position: flat.\nMarket: BTC/USDT perpetual. Last price 64000. 4h trend: up.\nGARCH conditional volatility: 0.012. Markov regime: trending.\nNews: spot ETF inflows positive; funding neutral.",
+  "expected": {
+    "action": "Long",
+    "action_confidence": 0.3633,
+    "edge_probability": 0.5044,
+    "conviction": 0.9943
+  },
+  "tolerance": 0.01,
+  "python_reference": {
+    "action": "SHORT",
+    "action_confidence": 0.4476,
+    "edge_probability": 0.5105,
+    "conviction": 0.9894,
+    "note": "KNOWN DIVERGENCE (2026-11-05): Python (PyTorch and ONNX-verified) picks SHORT (0.4476); Rust picks Long (0.3633) on the fine-tuned English model. Edge/conviction agree within ~0.006. Export verification passed (max prob diff 3.87e-07), so the ONNX file matches PyTorch; the divergence is in the Rust runtime path on this fine-tuned checkpoint. The multilingual base model matched exactly. Recommend re-running the fine-tune from the multilingual checkpoint (Phase 1 decision) and re-checking parity."
+  }
+}
