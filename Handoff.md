@@ -11,10 +11,12 @@ Doc Oc is a Rust daemon plus a terminal client for autonomous, paper-first tradi
 
 ## Current state
 
-- Design research is complete.
-- Laya capabilities, limits, fine-tuning path, and Rust/ONNX runtime are verified.
-- All design questions are closed in `Open_Questions.md`.
-- No code, repo, VPS, or live adapter exists yet.
+- Phase 0 is in progress on branch `phase-0`.
+- Rust workspace created and committed; `dococ-laya` runtime wrapper passes tests.
+- Multilingual ONNX model exported and verified; Rust/Python parity exact.
+- Free-first data sources tested; Binance BTCUSDT 1h data acquired (33,702 bars, no gaps).
+- `opencode run` JSON and prompt-injection probes pass with `--standalone`.
+- Teacher baseline v1 beats costs (positive net return, positive Sharpe) but needs improvement.
 - The HuggingFace and Kaggle tokens in `opencode.json` were exposed during this session. The user has decided to leave them as-is because they are unused but valid. No rotation blocker; use them only via the configured MCP/CLI and never print or copy them.
 - `Design_Document.md` now has a Decision Record at the top and updated Laya/LLM text; some older onboarding detail remains and a full rewrite is a Phase 0 documentation task.
 
@@ -55,6 +57,14 @@ Doc Oc is a Rust daemon plus a terminal client for autonomous, paper-first tradi
 - Teacher, state, action, model-management, runtime, retraining, venue, data, LLM, and risk decisions.
 - Open-question register closed for design.
 - Checklist and handoff written.
+- Phase 0: Rust workspace bootstrapped (7 crates), committed on `phase-0`.
+- Phase 0: Laya multilingual model exported and verified; Rust/Python parity exact.
+- Phase 0: `LayaRuntime` wrapper with `load`, `load_with_threads`, `decide`, and `ActionDecision`.
+- Phase 0: Benchmark tooling; single-thread ~5.6 s, 4-thread ~5.2 s per decision, peak RSS ~1.5 GB.
+- Phase 0: Free-data spike (Binance, CoinTelegraph RSS, Forex Factory calendar); GDELT rate-limited.
+- Phase 0: Binance BTCUSDT 1h data acquired (33,702 bars, no gaps).
+- Phase 0: Teacher baseline v1 beats costs (positive net return, positive Sharpe).
+- Phase 0: `opencode run` JSON and injection probes pass.
 
 ## What is pending
 
@@ -70,11 +80,11 @@ None. The user accepted the token exposure and chose to leave the existing token
 
 ### Phase 0 spikes
 
-- [ ] Laya ONNX/Rust parity, latency, and memory.
-- [ ] Fine-tune one BTC checkpoint; export ONNX; parity test.
-- [ ] Causal teacher backtest on BTC and gold; cost model.
-- [ ] `opencode run` JSON reliability and prompt-injection test.
-- [ ] Free-first data and news ingestion.
+- [x] Laya ONNX/Rust parity, latency, and memory (parity PASS; latency ~5.2-5.6 s, peak RSS ~1.5 GB).
+- [~] Fine-tune one BTC checkpoint; export ONNX; parity test (export done; fine-tune pending).
+- [~] Causal teacher backtest on BTC; cost model (v1 beats costs; needs improvement).
+- [x] `opencode run` JSON reliability and prompt-injection test.
+- [x] Free-first data and news ingestion.
 - [ ] Linux VPS benchmark.
 
 ### External decisions deferred to live gating
@@ -86,11 +96,11 @@ None. The user accepted the token exposure and chose to leave the existing token
 
 ## Next five actions
 
-1. Confirm the existing HuggingFace and Kaggle tokens work through the MCP/CLI without printing them.
-2. Initialize the Rust workspace and CI.
-3. Run the Laya ONNX/Rust parity spike.
-4. Build the causal teacher and backtest BTC.
-5. Run the `opencode run` JSON spike.
+1. Run the Laya benchmark on the Linux VPS to confirm latency and memory.
+2. Fine-tune a BTC checkpoint with `laya-train` using the v1 teacher labels.
+3. Improve the teacher (better regime model, longer features) before Laya training.
+4. Implement the deterministic risk guardian (`dococ-risk`).
+5. Build the venue trait and sim venue (`dococ-venue`).
 
 ## How to resume
 
