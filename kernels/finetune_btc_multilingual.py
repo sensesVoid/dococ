@@ -48,12 +48,19 @@ with open(DATA) as f:
 print(f"Loaded {len(rows)} teacher-labeled examples")
 
 print("\n--- Dry run ---")
-result = subprocess.run(
-    ["laya-train", "--data", DATA, "--base", base_dir, "--dry-run"],
-    capture_output=True, text=True)
-print(result.stdout[-800:] if result.stdout else "no stdout")
-if result.returncode != 0:
-    print(f"Dry run failed (rc={result.returncode}): {result.stderr[-800:]}")
+try:
+    result = subprocess.run(
+        ["laya-train", "--data", DATA, "--base", base_dir, "--dry-run"],
+        capture_output=True, text=True)
+    print(result.stdout[-800:] if result.stdout else "no stdout")
+    print("STDERR:", result.stderr[-800:] if result.stderr else "no stderr")
+    if result.returncode != 0:
+        print(f"Dry run failed (rc={result.returncode})")
+        sys.exit(1)
+except Exception as e:
+    import traceback
+    print("Dry run crashed:", e)
+    print(traceback.format_exc())
     sys.exit(1)
 print("Dry run PASSED")
 
@@ -70,7 +77,7 @@ try:
             "--grad-accum", "8",
             "--freeze-encoder",
             "--device", "cuda",
-            "--max-len", "1024",
+            "--max-len", "512",
         ],
         capture_output=True, text=True)
     print(result.stdout[-2000:] if result.stdout else "no stdout")
