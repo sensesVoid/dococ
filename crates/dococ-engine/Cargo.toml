@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+dococ-core = { path = "../dococ-core" }
+dococ-laya = { path = "../dococ-laya" }
+dococ-risk = { path = "../dococ-risk" }
+dococ-oms = { path = "../dococ-oms" }
+dococ-venue = { path = "../dococ-venue" }

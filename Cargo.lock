@@ -277,6 +277,13 @@ version = "0.1.0"
 [[package]]
 name = "dococ-engine"
 version = "0.1.0"
+dependencies = [
+ "dococ-core",
+ "dococ-laya",
+ "dococ-oms",
+ "dococ-risk",
+ "dococ-venue",
+]
 
 [[package]]
 name = "dococ-laya"
