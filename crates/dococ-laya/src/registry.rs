@@ -85,6 +85,37 @@ impl ModelRegistry {
     pub fn is_empty(&self) -> bool {
         self.models.is_empty()
     }
+
+    /// Atomically switch to a new model.
+    /// If file_bytes is provided, verifies SHA-256 before switching.
+    /// On failure, the existing active model remains active.
+    /// Returns the previously active model name (for rollback).
+    pub fn atomic_switch(
+        &mut self,
+        name: &str,
+        file_bytes: Option<&[u8]>,
+    ) -> Result<Option<String>, &'static str> {
+        let meta = self.models.get(name).ok_or("model not registered")?;
+        if let Some(bytes) = file_bytes {
+            if sha256_hex(bytes) != meta.sha256 {
+                return Err("SHA-256 mismatch: model file corrupt or modified");
+            }
+        }
+        let prev = self.active.clone();
+        self.active = Some(name.to_string());
+        Ok(prev)
+    }
+
+    /// Roll back to a previous model.
+    pub fn rollback(&mut self, previous: Option<&str>) -> Result<(), &'static str> {
+        match previous {
+            Some(name) => self.set_active(name),
+            None => {
+                self.active = None;
+                Ok(())
+            }
+        }
+    }
 }
 
 fn sha256_hex(data: &[u8]) -> String {
@@ -205,5 +236,58 @@ mod tests {
     fn verify_sha256_unknown_model() {
         let reg = ModelRegistry::new();
         assert!(reg.verify_sha256("unknown", b"hello").is_err());
+    }
+
+    #[test]
+    fn atomic_switch_swaps_active_and_returns_previous() {
+        let mut reg = ModelRegistry::new();
+        let mut meta1 = make_meta("btc-v1");
+        meta1.sha256 = sha256_hex(b"model1");
+        let mut meta2 = make_meta("btc-v2");
+        meta2.sha256 = sha256_hex(b"model2");
+        reg.register(meta1);
+        reg.register(meta2);
+
+        reg.set_active("btc-v1").unwrap();
+        assert_eq!(reg.active().unwrap().name, "btc-v1");
+
+        // Atomic switch with SHA-256 check
+        let prev = reg.atomic_switch("btc-v2", Some(b"model2")).unwrap();
+        assert_eq!(prev, Some("btc-v1".to_string()));
+        assert_eq!(reg.active().unwrap().name, "btc-v2");
+    }
+
+    #[test]
+    fn atomic_switch_fails_and_preserves_active_on_corrupt_model() {
+        let mut reg = ModelRegistry::new();
+        let mut meta1 = make_meta("btc-v1");
+        meta1.sha256 = sha256_hex(b"model1");
+        let mut meta2 = make_meta("btc-v2");
+        meta2.sha256 = sha256_hex(b"model2");
+        reg.register(meta1);
+        reg.register(meta2);
+
+        reg.set_active("btc-v1").unwrap();
+
+        // Pass corrupted bytes to btc-v2
+        let res = reg.atomic_switch("btc-v2", Some(b"corrupt-data"));
+        assert!(res.is_err());
+        // Active model must STILL be btc-v1!
+        assert_eq!(reg.active().unwrap().name, "btc-v1");
+    }
+
+    #[test]
+    fn rollback_restores_previous_model() {
+        let mut reg = ModelRegistry::new();
+        reg.register(make_meta("btc-v1"));
+        reg.register(make_meta("btc-v2"));
+
+        reg.set_active("btc-v1").unwrap();
+        let prev = reg.atomic_switch("btc-v2", None).unwrap();
+        assert_eq!(reg.active().unwrap().name, "btc-v2");
+
+        // Roll back
+        reg.rollback(prev.as_deref()).unwrap();
+        assert_eq!(reg.active().unwrap().name, "btc-v1");
     }
 }
