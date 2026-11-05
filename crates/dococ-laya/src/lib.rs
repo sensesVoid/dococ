@@ -125,7 +125,9 @@ pub fn build_questions() -> laya::Result<QuestionSet> {
         )
 }
 
-#[cfg(test)]
+mod registry;
+pub use registry::*;
+
 mod tests {
     use super::*;
 
