@@ -5,8 +5,14 @@
 
 pub mod regime;
 pub mod guard;
+pub mod teacher;
 pub use regime::{RegimeHysteresis, RegimeState};
 pub use guard::{StaleDataGuard, StaleGuardError};
+pub use teacher::{
+    TeacherAction, TeacherConfig, TeacherDecision, TeacherPolicy,
+    BacktestMetrics, apply_holding_period, calculate_metrics,
+    always_hold_metrics, random_baseline_metrics,
+};
 
 /// GARCH(1,1) parameters.
 #[derive(Debug, Clone, Copy)]

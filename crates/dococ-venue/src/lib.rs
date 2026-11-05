@@ -276,11 +276,148 @@ impl CostModel {
     }
 }
 
-#[cfg(test)]
+/// Dynamic cost model recalibrating slippage by order size, volatility, and time-of-day.
+#[derive(Debug, Clone, Copy)]
+pub struct DynamicCostModel {
+    pub base_fee_bps: f64,
+    pub base_slippage_bps: f64,
+    pub size_coef_bps_per_10k: f64,
+    pub vol_coef: f64,
+}
+
+impl Default for DynamicCostModel {
+    fn default() -> Self {
+        Self {
+            base_fee_bps: 5.0,
+            base_slippage_bps: 1.0,
+            size_coef_bps_per_10k: 0.5,
+            vol_coef: 1.0,
+        }
+    }
+}
+
+impl DynamicCostModel {
+    pub fn effective_slippage_bps(&self, notional: f64, vol: Option<f64>, is_off_hours: bool) -> f64 {
+        let size_penalty = (notional / 10_000.0).max(0.0) * self.size_coef_bps_per_10k;
+        let vol_factor = match vol {
+            Some(v) => (v / 0.02).max(0.5).min(5.0) * self.vol_coef,
+            None => 1.0,
+        };
+        let time_penalty = if is_off_hours { 1.5 } else { 1.0 };
+        (self.base_slippage_bps + size_penalty) * vol_factor * time_penalty
+    }
+
+    pub fn estimate_dynamic(
+        &self,
+        quantity: f64,
+        price: f64,
+        vol: Option<f64>,
+        is_off_hours: bool,
+    ) -> CostEstimate {
+        let notional = quantity * price;
+        let fee = notional * self.base_fee_bps / 10_000.0;
+        let slip_bps = self.effective_slippage_bps(notional, vol, is_off_hours);
+        let slippage = notional * slip_bps / 10_000.0;
+        CostEstimate {
+            fee,
+            slippage,
+            total: fee + slippage,
+        }
+    }
+}
+
+/// Record of an executed fill with arrival context.
+#[derive(Debug, Clone)]
+pub struct FillRecord {
+    pub fill: Fill,
+    pub arrival_price: f64,
+    pub fee_paid: f64,
+    pub timestamp: i64,
+}
+
+/// Realized cost breakdown from actual fill execution.
+#[derive(Debug, Clone, Copy)]
+pub struct RealizedCost {
+    pub fee_paid: f64,
+    pub slippage_dollars: f64,
+    pub slippage_bps: f64,
+    pub total_cost: f64,
+}
+
+impl RealizedCost {
+    pub fn from_fill(record: &FillRecord) -> Self {
+        let price_diff = match record.fill.side {
+            Side::Buy => record.fill.price - record.arrival_price,
+            Side::Sell => record.arrival_price - record.fill.price,
+        };
+        let slippage_dollars = price_diff.max(0.0) * record.fill.quantity;
+        let slippage_bps = if record.arrival_price > 0.0 {
+            (price_diff.max(0.0) / record.arrival_price) * 10_000.0
+        } else {
+            0.0
+        };
+        Self {
+            fee_paid: record.fee_paid,
+            slippage_dollars,
+            slippage_bps,
+            total_cost: record.fee_paid + slippage_dollars,
+        }
+    }
+
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dynamic_cost_model_scales_with_size_volatility_and_time() {
+        let model = DynamicCostModel {
+            base_fee_bps: 5.0,
+            base_slippage_bps: 1.0,
+            size_coef_bps_per_10k: 0.5,
+            vol_coef: 1.0,
+        };
+
+        // Standard 10k trade, normal vol (0.02), regular hours
+        let slip_std = model.effective_slippage_bps(10_000.0, Some(0.02), false);
+        // (1.0 + 0.5) * 1.0 * 1.0 = 1.5 bps
+        assert!((slip_std - 1.5).abs() < 1e-6);
+
+        // High vol trade (0.04 -> vol factor 2.0)
+        let slip_high_vol = model.effective_slippage_bps(10_000.0, Some(0.04), false);
+        // 1.5 * 2.0 = 3.0 bps
+        assert!((slip_high_vol - 3.0).abs() < 1e-6);
+
+        // Off hours (penalty 1.5x)
+        let slip_off_hours = model.effective_slippage_bps(10_000.0, Some(0.02), true);
+        // 1.5 * 1.5 = 2.25 bps
+        assert!((slip_off_hours - 2.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn realized_cost_from_fills_calculates_slippage_and_fee() {
+        let fill = Fill {
+            order_id: 1,
+            symbol: "BTCUSDT".into(),
+            side: Side::Buy,
+            quantity: 0.5,
+            price: 60_050.0, // Filled at 60,050 with arrival price 60,000 -> 50 slippage
+        };
+        let record = FillRecord {
+            fill,
+            arrival_price: 60_000.0,
+            fee_paid: 15.0,
+            timestamp: 1000,
+        };
+
+        let realized = RealizedCost::from_fill(&record);
+        assert_eq!(realized.fee_paid, 15.0);
+        assert!((realized.slippage_dollars - 25.0).abs() < 1e-6); // 50 * 0.5 = 25.0
+        assert!((realized.total_cost - 40.0).abs() < 1e-6);
+        // Slippage bps: 50 / 60_000 * 10_000 = 8.333 bps
+        assert!((realized.slippage_bps - 8.3333).abs() < 1e-3);
+    }
 
     #[test]
     fn sim_venue_fills_market_buy_with_slippage() {

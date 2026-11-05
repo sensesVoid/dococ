@@ -453,6 +453,7 @@ version = "0.1.0"
 name = "dococ-quant"
 version = "0.1.0"
 dependencies = [
+ "dococ-core",
  "serde",
  "serde_json",
 ]
