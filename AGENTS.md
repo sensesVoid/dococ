@@ -11,10 +11,10 @@ Manual snapshot generated from `.agent_context/memory/` because `context-janitor
 
 ## Current state
 
-- Design closed; no code, repo, VPS, or live adapter yet.
-- Read `Open_Questions.md`, `Implementation_Checklist.md`, and `Handoff.md` before acting.
-- Token decision: leave the existing HuggingFace and Kaggle tokens as-is; they are unused but valid. Use only via MCP/CLI; never print or copy them.
-- Development on Windows; production target is a Linux VPS, 8 vCPU/16 GB RAM.
+- Phase 1 in progress. All 7 Rust crates implemented with 60+ tests passing.
+- Laya ONNX parity verified. Teacher v1 beats costs. Kaggle fine-tune pipeline validated.
+- VPS deferred to laptop+ngrok for development.
+- Tokens left as-is per user decision.
 
 ## Key decisions
 
@@ -33,7 +33,7 @@ Manual snapshot generated from `.agent_context/memory/` because `context-janitor
 - `Design_Document.md` - original design; the Decision Record supersedes the old Laya/LLM/onboarding sections.
 - `Design_Recommendations.md` - full recommendation set.
 - `Open_Questions.md` - closed register and locked decisions.
-- `Implementation_Checklist.md` - phased build plan and gates.
+- `Implementation_Checklist.md` - phased build plan with acceptance criteria and gates.
 - `Handoff.md` - current state and resume instructions.
 - `.agent_context/memory/*.md` - durable facts, decisions, gotchas.
 
@@ -44,3 +44,38 @@ Manual snapshot generated from `.agent_context/memory/` because `context-janitor
 - Laya's context is small; keep the state under budget.
 - Full checkpoints are 1.3-1.7 GB each.
 - Funded-firm automation permission is a go/no-go.
+- Laya inference takes ~5.5s on CPU, not 100-450ms as assumed.
+- GDELT requires 1 req/5s rate limiting.
+
+## House Rules (MUST FOLLOW)
+
+### Skills
+- At session start, invoke `using-superpowers` to establish skill usage.
+- Before creative work (features, components, behavior changes), invoke `brainstorming`.
+- Before executing a plan, invoke `executing-plans` or `subagent-driven-development`.
+- Before any code change, invoke `test-driven-development` (RED-GREEN-REFACTOR).
+- Before claiming work complete, invoke `verification-before-completion`.
+- When debugging, invoke `systematic-debugging`.
+- When receiving code review, invoke `receiving-code-review`.
+- When finishing a branch, invoke `finishing-a-development-branch`.
+- Use `memory-keeper` for durable facts, decisions, and gotchas.
+- Use `find-skills` to discover installable skills when needed.
+
+### Memory (SQAC)
+- At session start, call `mem_bootstrap` once to load working context.
+- Record meaningful turns with `mem_observe(role, text)`.
+- At task boundaries, call `mem_checkpoint(goal, summary)`.
+- Search durable knowledge with `mem_search`; recall recent work with `mem_recall`.
+- Promote stable facts with `mem_graduate`; keep memory sparse with `mem_sparsify`.
+- Never fabricate memory; say "I don't have that in memory" if nothing is found.
+
+### Checklist
+- Mark completed items in `Implementation_Checklist.md` with `[x]`.
+- Mark in-progress items with `[~]`.
+- Update `Handoff.md` at task boundaries.
+- Commit after each logical change.
+
+### Git
+- Work on feature branches, not main.
+- Never start implementation on main/master without explicit consent.
+- Use `using-git-worktrees` for isolated workspaces when needed.
