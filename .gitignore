@@ -1,0 +1,28 @@
+# Rust
+/target/
+**/*.rs.bk
+**/*.pdb
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local data and model artifacts
+/models/
+/artifacts/
+/data/
+*.onnx
+*.safetensors
+*.gguf
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Agent scratch
+.superpowers/
+.opencode/
