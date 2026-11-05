@@ -130,7 +130,41 @@ fn main() {
             println!("  (not yet implemented)");
         }
         Some(Commands::Paper { asset }) => {
-            println!("Paper trading: {} (daemon not connected)", asset);
+            let model_dir = std::env::var("DOCOC_LAYA_MODEL").unwrap_or_else(|_| "models/btcusdt_ml".to_string());
+            let symbol = asset.to_uppercase();
+            println!("Paper trading: {} (model: {})", symbol, model_dir);
+            match dococ_laya::LayaRuntime::load(&model_dir) {
+                Ok(laya) => {
+                    let strategy = dococ_engine::LayaStrategy::new(laya);
+                    let mut venue = dococ_venue::SimVenue::new(100_000.0, 5.0);
+                    let bars = dococ_venue::live::fetch_latest(&symbol, 10).unwrap_or_default();
+                    if bars.is_empty() {
+                        println!("No live bars fetched; cannot start paper loop.");
+                        return;
+                    }
+                    let price = bars.last().map(|b| b.1).unwrap_or(0.0);
+                    venue.set_price(&symbol, price);
+                    let account = dococ_core::Account::new(dococ_core::AccountId(1), 100_000.0);
+                    let scheduler = dococ_engine::Scheduler::new(900, 1);
+                    let mut engine = dococ_engine::Engine::new(
+                        strategy,
+                        dococ_risk::RiskConfig::default(),
+                        venue,
+                        account,
+                        scheduler,
+                    );
+                    let sym = dococ_core::Symbol::new(&symbol);
+                    for (ts, close) in &bars {
+                        let bar = dococ_core::Bar { timestamp: *ts, open: *close, high: *close, low: *close, close: *close, volume: 0.0 };
+                        if let Ok(Some(tick)) = engine.on_bar(&bar, &sym) {
+                            println!("  {} {:?} conf={:.3} target={:.4}", ts, tick.action, tick.action_confidence, tick.target_qty);
+                        }
+                    }
+                    let acct = engine.account();
+                    println!("Paper run complete. Equity {:.2}, DD {:.2}%", acct.equity, acct.drawdown() * 100.0);
+                }
+                Err(e) => println!("Failed to load model: {e}"),
+            }
         }
         Some(Commands::Shadow { asset, bars }) => {
             match std::env::var("DOCOC_LAYA_MODEL") {

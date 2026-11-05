@@ -147,11 +147,10 @@ impl<S: Strategy> Engine<S> {
         symbol: &Symbol,
     ) -> Result<Option<TickResult>, Box<dyn std::error::Error>> {
         let now = bar.timestamp;
-        self.scheduler.mark_bar(now);
-
         if !self.scheduler.should_evaluate(now) {
             return Ok(None);
         }
+        self.scheduler.mark_bar(now);
 
         // Build the compact state via StateBuilder.
         let mut sb = StateBuilder::default();
