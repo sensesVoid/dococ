@@ -2,8 +2,8 @@
 
 Date: 2026-11-05
 Owner: @Geh
-Status: Phase 1 buildables in progress; Phase 2 (Rust teacher) next
-Next session starts at: First unchecked item in `Implementation_Checklist.md` — Phase 2 Rust teacher (GARCH/Markov ports) or remaining Phase 3 items (`spawn_blocking` wiring, atomic model switch, golden tests)
+Status: Phase 2 done; Phase 3 close-out done; Phase 5 (training pipeline) next
+Next session starts at: Python/Rust golden tests in CI (last Phase 3 item), then Phase 5 training pipeline
 
 ## What this project is
 
@@ -11,10 +11,11 @@ Doc Oc is a Rust daemon plus a terminal client for autonomous, paper-first tradi
 
 ## Current state
 
-- Branch `phase-0` pushed to `origin/phase-0` (commit `119da52`); repo clean.
-- `cargo test --workspace`: 125 passed, 1 ignored (`model_smoke`), 0 failed.
-- Phase 1 built across 8 crates: core, risk, oms, venue, engine, cli, laya, intel.
-- Phase 1/4 items done: invalid-action handling (NO_ACTION fallback), SHA-256 `verify_sha256`, exchange-announcement parsing, brief schema, subprocess adapter (`call_subprocess`, `extract_text`), audit log, economic calendar, LRU cache wired into engine, timeout infrastructure.
+- Branch `phase-0` (was pushed at `119da52`, now 5 commits ahead locally: `108f2ea`, `0593737`, `f5f2a01`, `518d97b`, `b8870cf`).
+- `cargo test --workspace`: 151 passed, 1 ignored (`model_smoke`), 0 failed (9 crates incl. new `dococ-quant`).
+- Phase 2 DONE: `dococ-quant` GARCH + Markov with Python parity; regime hysteresis + stale guards; teacher policy + backtest parity + dynamic cost model.
+- Phase 3 close-out DONE: `atomic_switch`/rollback in registry; `spawn_blocking` wiring + timeout fallback to NO_ACTION. Remaining: Python/Rust golden tests in CI.
+- Phases 1, 3, 4 built across dococ-core/risk/oms/venue/engine/cli/laya/intel (invalid-action handling, SHA-256 `verify_sha256`, exchange-announcement parsing, brief schema, subprocess adapter, audit log, economic calendar, LRU cache wired into engine, timeout infrastructure).
 - Phase 0 is closed (VPS benchmark deferred to laptop+ngrok).
 - Rust workspace created and committed; `dococ-laya` runtime wrapper passes tests.
 - Multilingual ONNX model exported and verified; Rust/Python parity exact.
@@ -100,11 +101,11 @@ None. The user accepted the token exposure and chose to leave the existing token
 
 ## Next five actions
 
-1. Port the teacher to Rust (Phase 2): GARCH variance recursion + Markov forward filter with Python parity.
-2. Remaining Phase 3: `spawn_blocking` wiring in the engine, atomic model switch, Python/Rust golden tests in CI.
+1. Python/Rust golden tests in CI (last Phase 3 item).
+2. Phase 5: dataset builder (historical states, teacher labels, costs, purged splits), then `laya-train` full fine-tune with teacher labels.
 3. Run the 20-run LLM latency/injection measurement (Phase 0.4 acceptance).
-4. Push the real Kaggle fine-tuning job with teacher labels; export ONNX; rerun parity.
-5. Provision/benchmark the VPS before live trading; keep laptop+ngrok for development/paper work.
+4. Provision/benchmark the VPS before live trading; keep laptop+ngrok for development/paper work.
+5. Remaining Phase 0: calibration temps, ONNX export/parity rerun, purged walk-forward, gold data.
 
 ## How to resume
 

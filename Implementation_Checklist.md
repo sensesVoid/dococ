@@ -92,22 +92,22 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 ## Phase 2 - Quant and teacher in Rust
 
-- [ ] Port GARCH variance recursion to Rust; parity against Python on fixed series.
-- [ ] Port the Markov forward filter; parity against Python.
-- [ ] Add regime hysteresis and stale-data guards.
-- [ ] Implement the teacher policy in Rust; replay the Python backtest and match.
-- [ ] Add the cost model from fills; recalibrate slippage by size, time, and volatility.
-- [ ] Add always-HOLD, random, and teacher baselines to reports.
+- [x] Port GARCH variance recursion to Rust; parity against Python on fixed series.
+- [x] Port the Markov forward filter; parity against Python.
+- [x] Add regime hysteresis and stale-data guards.
+- [x] Implement the teacher policy in Rust; replay the Python backtest and match.
+- [x] Add the cost model from fills; recalibrate slippage by size, time, and volatility.
+- [x] Add always-HOLD, random, and teacher baselines to reports.
 
 **Gate 2:** Rust teacher matches Python within tolerance; cost-adjusted out-of-sample results meet the Phase 0 bar; Markov is enabled only if it beats GARCH alone.
 
 ## Phase 3 - Laya runtime and state
 
 - [x] State schema v1: deterministic ordering, units, NA sentinels, token counter, template hash.
-- [~] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading, LRU cache (wired into `dococ-engine`), timeout infrastructure (`run_with_timeout`, `InferenceTimeout`) done; `spawn_blocking` wiring in engine still pending.)
+- [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading, LRU cache (wired into `dococ-engine`), timeout infrastructure (`run_with_timeout`, `InferenceTimeout`), and `spawn_blocking` worker thread execution done.)
 - [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema, `validate_action`, and invalid-action-as-NO_ACTION handling in engine tick done.)
 - [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya. (`PositionSizer` wired into engine tick.)
-- [~] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry, SHA-256 verification (`verify_sha256`, sha2 hex helper), and rollback support done; atomic switch still pending.)
+- [x] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry, SHA-256 verification, atomic model switch, and rollback support done.)
 - [ ] Python/Rust golden tests in CI.
 
 **Gate 3:** BTC runs end-to-end in replay with a fine-tuned checkpoint; state never exceeds the token budget; invalid actions are logged and treated as NO_ACTION; p95 under 2 seconds.

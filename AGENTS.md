@@ -11,10 +11,11 @@ Manual snapshot generated from `.agent_context/memory/` because `context-janitor
 
 ## Current state
 
-- Phase 1 in progress; Phase 2 (Rust teacher) is the next buildable. All 8 Rust crates implemented (`dococ-core`, `dococ-risk`, `dococ-oms`, `dococ-venue`, `dococ-engine`, `dococ-cli`, `dococ-laya`, `dococ-intel`) with 125 tests passing, 1 ignored (`model_smoke`).
+- Phase 2 and Phase 3 close-out done; Phase 5 (training pipeline) is next. 9 Rust crates implemented (`dococ-core`, `dococ-risk`, `dococ-oms`, `dococ-venue`, `dococ-engine`, `dococ-cli`, `dococ-laya`, `dococ-intel`, `dococ-quant`) with 151 tests passing, 1 ignored (`model_smoke`).
+- `dococ-quant` implements GARCH + Markov (Python parity), regime hysteresis/stale guards, teacher policy with backtest parity, and dynamic cost model. Engine now wires `spawn_blocking` with timeout fallback to NO_ACTION; registry has `atomic_switch`/rollback.
 - Laya ONNX parity verified. Teacher v1 beats costs. Kaggle fine-tune pipeline validated (smoke v6 PASS).
 - `dococ-intel` implements the `opencode run` subprocess adapter, brief schema, news sources (RSS, exchange announcements, economic calendar, GDELT throttle), SQAC time-filtered retrieval, and audit log.
-- Branch `phase-0` pushed to `origin/phase-0` (https://github.com/sensesVoid/dococ.git), commit `119da52`.
+- Branch `phase-0` at `b8870cf` (was pushed at `119da52`); one uncommitted checklist sync pending commit+push.
 - VPS deferred to laptop+ngrok for development.
 - Tokens left as-is per user decision.
 
