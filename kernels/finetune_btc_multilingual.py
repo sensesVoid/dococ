@@ -25,10 +25,15 @@ token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
 print("Downloading multilingual checkpoint (subfolder)...")
 base_dir = snapshot_download(
     repo_id="convaiinnovations/laya",
-    subfolder="multilingual",
+    allow_patterns=["multilingual/**"],
     token=token,
     local_dir="/kaggle/working/base_multilingual",
 )
+if os.path.isdir(os.path.join(base_dir, "multilingual", "model.safetensors")) or os.path.isdir(os.path.join(base_dir, "multilingual")):
+    pass  # download includes subfolder content at repo root or nested; resolve below
+nested = os.path.join(base_dir, "multilingual")
+if os.path.isdir(nested) and os.path.exists(os.path.join(nested, "config.json")):
+    base_dir = nested
 print(f"Base checkpoint at {base_dir}")
 
 DATA = "/kaggle/input/doc-oc-btc-dataset/train.jsonl"
