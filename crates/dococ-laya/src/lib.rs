@@ -20,8 +20,75 @@ impl OrderAction {
     }
 }
 
-use laya::{Question, QuestionSet};
+use std::path::Path;
+
+use laya::{LayaEngine, Question, QuestionSet};
 use serde_json::Value;
+
+#[derive(Debug, thiserror::Error)]
+pub enum LayaDecisionError {
+    #[error(transparent)]
+    Laya(#[from] laya::LayaError),
+    #[error("missing or unexpected answer for `{0}`")]
+    UnexpectedAnswer(&'static str),
+    #[error("unknown action label `{0}`")]
+    UnknownAction(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActionDecision {
+    pub action: OrderAction,
+    pub action_confidence: f64,
+    pub edge_probability: f64,
+    pub conviction: f64,
+}
+
+pub struct LayaRuntime {
+    engine: LayaEngine,
+}
+
+impl LayaRuntime {
+    pub fn load(directory: impl AsRef<Path>) -> Result<Self, LayaDecisionError> {
+        Ok(Self {
+            engine: LayaEngine::from_directory(directory)?,
+        })
+    }
+
+    pub fn decide(&self, state: &str) -> Result<ActionDecision, LayaDecisionError> {
+        let questions = build_questions()?;
+        let answers = self.engine.predict(state, &questions)?;
+
+        let action_answer = answers
+            .get("action")
+            .ok_or(LayaDecisionError::UnexpectedAnswer("action"))?;
+        let choice = action_answer
+            .as_choice()
+            .ok_or(LayaDecisionError::UnexpectedAnswer("action"))?;
+        let action = OrderAction::from_label(&choice.choice)
+            .ok_or_else(|| LayaDecisionError::UnknownAction(choice.choice.clone()))?;
+
+        let edge_answer = answers
+            .get("edge")
+            .ok_or(LayaDecisionError::UnexpectedAnswer("edge"))?;
+        let edge = edge_answer
+            .as_noul()
+            .ok_or(LayaDecisionError::UnexpectedAnswer("edge"))?;
+
+        let conviction_answer = answers
+            .get("conviction")
+            .ok_or(LayaDecisionError::UnexpectedAnswer("conviction"))?;
+        let conviction = conviction_answer
+            .as_score()
+            .ok_or(LayaDecisionError::UnexpectedAnswer("conviction"))?;
+
+        Ok(ActionDecision {
+            action,
+            action_confidence: action_answer.answer_confidence(),
+            edge_probability: edge.probability,
+            conviction: conviction.score,
+        })
+    }
+}
 
 pub fn build_questions() -> laya::Result<QuestionSet> {
     QuestionSet::new()
@@ -68,5 +135,11 @@ mod tests {
         let questions = build_questions().expect("questions should build");
         let ids: Vec<&str> = questions.ids().collect();
         assert_eq!(ids, vec!["action", "edge", "conviction"]);
+    }
+
+    #[test]
+    fn load_fails_for_missing_model_directory() {
+        let result = LayaRuntime::load("definitely-not-a-model-directory");
+        assert!(result.is_err());
     }
 }
