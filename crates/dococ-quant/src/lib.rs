@@ -3,6 +3,11 @@
 /// GARCH(1,1) variance recursion and the Markov (Hamilton) forward filter,
 /// ported from the Python teacher (`scripts/teacher_*.py`) with parity tests.
 
+pub mod regime;
+pub mod guard;
+pub use regime::{RegimeHysteresis, RegimeState};
+pub use guard::{StaleDataGuard, StaleGuardError};
+
 /// GARCH(1,1) parameters.
 #[derive(Debug, Clone, Copy)]
 pub struct GarchParams {
