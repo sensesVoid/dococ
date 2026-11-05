@@ -127,8 +127,8 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 - [x] Dataset builder: historical states, teacher labels, costs, purged splits. (`scripts/build_dataset.py`: 2,120 BTC rows from 33,702 bars + teacher v1 labels (2,244 aligned by timestamp), 80/10/10 purged splits with 24-bar embargo; `laya-train --dry-run` PASS: 1,696 rows → 5,088 items.)
 - [~] `laya-train` pipeline: full fine-tune, calibration, ONNX export, metadata. (Kaggle dataset `sensesvoid/doc-oc-btc-dataset` ready; kernel v1 RUNNING with teacher labels, 4 epochs freeze-encoder. Calibration/export/parity pending.)
-- [ ] Asset pack: instrument metadata, GARCH/Markov params, model path, calibration, thresholds, stage.
-- [ ] `dococ asset add|list|show|promote|demote|rm`.
+- [x] Asset pack: instrument metadata, GARCH/Markov params, model path, calibration, thresholds, stage. (`dococ-asset` crate: `AssetPack` with validate/promote/demote, 4 tests.)
+- [x] `dococ asset add|list|show|promote|demote|rm`. (CLI subcommands tested end-to-end add/list/show.)
 - [ ] Drift monitor: calibration error, action distribution, PnL attribution, feature drift.
 - [ ] Weekly retraining job; shadow/paper comparison; rollback.
 
