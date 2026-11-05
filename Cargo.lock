@@ -457,6 +457,7 @@ name = "dococ-laya"
 version = "0.1.0"
 dependencies = [
  "laya-onnx",
+ "serde",
  "serde_json",
  "sha2",
  "thiserror",
