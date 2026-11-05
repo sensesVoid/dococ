@@ -1,4 +1,4 @@
-use dococ_quant::{garch_conditional_variance, GarchParams};
+use dococ_quant::{GarchParams, garch_conditional_variance};
 use serde::Deserialize;
 use std::fs;
 

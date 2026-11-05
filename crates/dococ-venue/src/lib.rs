@@ -121,11 +121,14 @@ impl SimVenue {
             };
 
             // Update position.
-            let position = self.positions.entry(stop.symbol.clone()).or_insert(Position {
-                symbol: stop.symbol.clone(),
-                quantity: 0.0,
-                avg_price: 0.0,
-            });
+            let position = self
+                .positions
+                .entry(stop.symbol.clone())
+                .or_insert(Position {
+                    symbol: stop.symbol.clone(),
+                    quantity: 0.0,
+                    avg_price: 0.0,
+                });
 
             let signed_qty = match stop.side {
                 Side::Buy => stop.quantity,
@@ -175,13 +178,11 @@ impl Venue for SimVenue {
 
         let fill_price = match order.order_type {
             OrderType::Market => self.fill_price(order.side, market_price),
-            OrderType::Limit { price } => {
-                match order.side {
-                    Side::Buy if market_price <= price => self.fill_price(order.side, market_price),
-                    Side::Sell if market_price >= price => self.fill_price(order.side, market_price),
-                    _ => return Err("limit not fillable"),
-                }
-            }
+            OrderType::Limit { price } => match order.side {
+                Side::Buy if market_price <= price => self.fill_price(order.side, market_price),
+                Side::Sell if market_price >= price => self.fill_price(order.side, market_price),
+                _ => return Err("limit not fillable"),
+            },
         };
 
         let order_id = self.next_order_id;
@@ -195,11 +196,14 @@ impl Venue for SimVenue {
             price: fill_price,
         };
 
-        let position = self.positions.entry(order.symbol.clone()).or_insert(Position {
-            symbol: order.symbol.clone(),
-            quantity: 0.0,
-            avg_price: 0.0,
-        });
+        let position = self
+            .positions
+            .entry(order.symbol.clone())
+            .or_insert(Position {
+                symbol: order.symbol.clone(),
+                quantity: 0.0,
+                avg_price: 0.0,
+            });
 
         let signed_qty = match order.side {
             Side::Buy => order.quantity,
@@ -211,9 +215,8 @@ impl Venue for SimVenue {
         } else {
             let total_qty = position.quantity + signed_qty;
             if total_qty != 0.0 {
-                position.avg_price = (position.avg_price * position.quantity
-                    + fill_price * signed_qty)
-                    / total_qty;
+                position.avg_price =
+                    (position.avg_price * position.quantity + fill_price * signed_qty) / total_qty;
             }
         }
         position.quantity += signed_qty;
@@ -260,7 +263,13 @@ pub struct CostEstimate {
 }
 
 impl CostModel {
-    pub fn estimate(&self, quantity: f64, price: f64, fee_bps: f64, slippage_bps: f64) -> CostEstimate {
+    pub fn estimate(
+        &self,
+        quantity: f64,
+        price: f64,
+        fee_bps: f64,
+        slippage_bps: f64,
+    ) -> CostEstimate {
         let notional = quantity * price;
         let fee = notional * fee_bps / 10_000.0;
         let slippage = notional * slippage_bps / 10_000.0;
@@ -297,7 +306,12 @@ impl Default for DynamicCostModel {
 }
 
 impl DynamicCostModel {
-    pub fn effective_slippage_bps(&self, notional: f64, vol: Option<f64>, is_off_hours: bool) -> f64 {
+    pub fn effective_slippage_bps(
+        &self,
+        notional: f64,
+        vol: Option<f64>,
+        is_off_hours: bool,
+    ) -> f64 {
         let size_penalty = (notional / 10_000.0).max(0.0) * self.size_coef_bps_per_10k;
         let vol_factor = match vol {
             Some(v) => (v / 0.02).max(0.5).min(5.0) * self.vol_coef,
@@ -363,7 +377,6 @@ impl RealizedCost {
             total_cost: record.fee_paid + slippage_dollars,
         }
     }
-
 }
 
 #[cfg(test)]

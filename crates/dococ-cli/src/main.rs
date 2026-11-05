@@ -1,7 +1,11 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "dococ", version, about = "Doc Oc paper-first trading daemon CLI")]
+#[command(
+    name = "dococ",
+    version,
+    about = "Doc Oc paper-first trading daemon CLI"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -58,13 +62,11 @@ fn main() {
             println!("  Drawdown:   N/A");
             println!("  Peak:       N/A");
         }
-        Some(Commands::Auto { state }) => {
-            match state.as_str() {
-                "on" => println!("Auto-trading: ENABLED (daemon not connected)"),
-                "off" => println!("Auto-trading: DISABLED (daemon not connected)"),
-                _ => println!("Usage: dococ auto on|off"),
-            }
-        }
+        Some(Commands::Auto { state }) => match state.as_str() {
+            "on" => println!("Auto-trading: ENABLED (daemon not connected)"),
+            "off" => println!("Auto-trading: DISABLED (daemon not connected)"),
+            _ => println!("Usage: dococ auto on|off"),
+        },
         Some(Commands::Kill) => {
             println!("KILL: Flattening all positions and halting (daemon not connected)");
         }

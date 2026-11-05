@@ -177,12 +177,17 @@ impl LlmAdapter {
             return Err("response is not a JSON object".to_string());
         }
 
-        let macro_regime = extract_string_field(trimmed, "macro_regime").unwrap_or_else(|| "unknown".to_string());
-        let news_bias = extract_string_field(trimmed, "news_bias").unwrap_or_else(|| "neutral".to_string());
-        let event_risk = extract_string_field(trimmed, "event_risk").unwrap_or_else(|| "medium".to_string());
+        let macro_regime =
+            extract_string_field(trimmed, "macro_regime").unwrap_or_else(|| "unknown".to_string());
+        let news_bias =
+            extract_string_field(trimmed, "news_bias").unwrap_or_else(|| "neutral".to_string());
+        let event_risk =
+            extract_string_field(trimmed, "event_risk").unwrap_or_else(|| "medium".to_string());
         let correlation_flag = extract_bool_field(trimmed, "correlation_flag").unwrap_or(false);
         let confidence = extract_number_field(trimmed, "confidence").unwrap_or(0.5);
-        let as_of = extract_number_field(trimmed, "as_of").map(|v| v as i64).unwrap_or(now);
+        let as_of = extract_number_field(trimmed, "as_of")
+            .map(|v| v as i64)
+            .unwrap_or(now);
 
         Ok(LlmBrief {
             macro_regime,
@@ -232,7 +237,9 @@ fn extract_number_field(json: &str, field: &str) -> Option<f64> {
     let after = &json[idx + pattern.len()..];
     let colon = after.find(':')?;
     let val = after[colon + 1..].trim_start();
-    let end = val.find(|c: char| c == ',' || c == '}' || c.is_whitespace()).unwrap_or(val.len());
+    let end = val
+        .find(|c: char| c == ',' || c == '}' || c.is_whitespace())
+        .unwrap_or(val.len());
     val[..end].parse().ok()
 }
 
@@ -276,7 +283,8 @@ mod tests {
     #[test]
     fn build_prompt_includes_headlines() {
         let adapter = LlmAdapter::new(LlmConfig::default());
-        let prompt = adapter.build_prompt(&["headline 1".into(), "headline 2".into()], "BTC at 64k");
+        let prompt =
+            adapter.build_prompt(&["headline 1".into(), "headline 2".into()], "BTC at 64k");
         assert!(prompt.contains("headline 1"));
         assert!(prompt.contains("headline 2"));
         assert!(prompt.contains("BTC at 64k"));

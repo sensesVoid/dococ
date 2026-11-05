@@ -104,9 +104,9 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 ## Phase 3 - Laya runtime and state
 
 - [x] State schema v1: deterministic ordering, units, NA sentinels, token counter, template hash.
-- [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading, LRU cache (wired into `dococ-engine`), timeout infrastructure (`run_with_timeout`, `InferenceTimeout`), and `spawn_blocking` worker thread execution done.)
-- [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema, `validate_action`, and invalid-action-as-NO_ACTION handling in engine tick done.)
-- [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya. (`PositionSizer` wired into engine tick.)
+- [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading, LRU cache, `spawn_blocking` helper + timeout fallback to NO_ACTION done. The synchronous `on_bar` tick calls the strategy directly with a post-hoc `InferenceTimeout` check — worker-thread offload happens via `decide_blocking` for async/external callers. `StateBuilder` + `MAX_STATE_TOKENS` budget enforcement wired into the tick; LRU remains storage-only.)
+- [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema, `validate_action`, invalid-action-as-NO_ACTION handling in engine tick, and strategy confidence pass-through done.)
+- [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya. (`PositionSizer` wired into engine tick; `open_notional` now computed from account positions. Vol forecast still placeholder 0.02 pending GARCH wiring.)
 - [x] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry, SHA-256 verification, atomic model switch, and rollback support done.)
 - [ ] Python/Rust golden tests in CI.
 

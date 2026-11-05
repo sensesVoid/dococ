@@ -13,8 +13,8 @@ News: spot ETF inflows positive; funding neutral.
 }
 
 fn main() {
-    let model_dir =
-        std::env::var("DOCOC_LAYA_MODEL").expect("set DOCOC_LAYA_MODEL to the ONNX model directory");
+    let model_dir = std::env::var("DOCOC_LAYA_MODEL")
+        .expect("set DOCOC_LAYA_MODEL to the ONNX model directory");
     let threads = std::env::var("DOCOC_LAYA_THREADS")
         .ok()
         .and_then(|value| value.parse::<u32>().ok());

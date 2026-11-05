@@ -218,7 +218,10 @@ mod tests {
 
     #[test]
     fn validate_action_invalid() {
-        assert!(matches!(validate_action("BUY"), ActionValidation::Invalid(_)));
+        assert!(matches!(
+            validate_action("BUY"),
+            ActionValidation::Invalid(_)
+        ));
         assert!(matches!(validate_action(""), ActionValidation::Invalid(_)));
     }
 

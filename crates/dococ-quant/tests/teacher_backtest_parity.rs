@@ -1,4 +1,6 @@
-use dococ_quant::{apply_holding_period, calculate_metrics, always_hold_metrics, random_baseline_metrics};
+use dococ_quant::{
+    always_hold_metrics, apply_holding_period, calculate_metrics, random_baseline_metrics,
+};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -42,12 +44,22 @@ fn teacher_backtest_matches_python_metrics() {
     // Turnover
     let mut turnover = vec![0.0f64; positions.len()];
     for t in 0..positions.len() {
-        let prev = if t == 0 { all_positions[0] } else { positions[t - 1] };
+        let prev = if t == 0 {
+            all_positions[0]
+        } else {
+            positions[t - 1]
+        };
         turnover[t] = (positions[t] - prev).abs();
     }
 
     let cost_per_side = 0.0006; // 6 bps = 5 bps fee + 1 bps slippage
-    let m = calculate_metrics(&log_returns, positions, &turnover, cost_per_side, all_positions[0]);
+    let m = calculate_metrics(
+        &log_returns,
+        positions,
+        &turnover,
+        cost_per_side,
+        all_positions[0],
+    );
 
     println!("Rust Teacher metrics: {:?}", m);
 

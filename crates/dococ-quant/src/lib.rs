@@ -1,17 +1,15 @@
+pub mod guard;
 /// Quant primitives for the causal teacher (Phase 2).
 ///
 /// GARCH(1,1) variance recursion and the Markov (Hamilton) forward filter,
 /// ported from the Python teacher (`scripts/teacher_*.py`) with parity tests.
-
 pub mod regime;
-pub mod guard;
 pub mod teacher;
-pub use regime::{RegimeHysteresis, RegimeState};
 pub use guard::{StaleDataGuard, StaleGuardError};
+pub use regime::{RegimeHysteresis, RegimeState};
 pub use teacher::{
-    TeacherAction, TeacherConfig, TeacherDecision, TeacherPolicy,
-    BacktestMetrics, apply_holding_period, calculate_metrics,
-    always_hold_metrics, random_baseline_metrics,
+    BacktestMetrics, TeacherAction, TeacherConfig, TeacherDecision, TeacherPolicy,
+    always_hold_metrics, apply_holding_period, calculate_metrics, random_baseline_metrics,
 };
 
 /// GARCH(1,1) parameters.
@@ -130,9 +128,9 @@ pub struct GaussianHmm {
     pub n_states: usize,
     /// transition matrix A[i][j] = P(s_t=j | s_{t-1}=i)
     pub transition: Vec<Vec<f64>>,
-    pub means: Vec<Vec<f64>>,   // [state][feature]
+    pub means: Vec<Vec<f64>>,     // [state][feature]
     pub variances: Vec<Vec<f64>>, // [state][feature] (diag)
-    pub initial: Vec<f64>,     // initial distribution
+    pub initial: Vec<f64>,        // initial distribution
 }
 
 impl GaussianHmm {

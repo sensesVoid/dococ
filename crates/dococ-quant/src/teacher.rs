@@ -95,7 +95,11 @@ impl TeacherPolicy {
 
         let trend_z = 0.7 * mom_24 / vol + 0.3 * mom_72 / (vol * (3.0f64).sqrt());
 
-        let p_down = if posteriors.is_empty() { 0.0 } else { posteriors[0] };
+        let p_down = if posteriors.is_empty() {
+            0.0
+        } else {
+            posteriors[0]
+        };
         let p_up = match posteriors.len() {
             0 => 0.0,
             1 => posteriors[0],
@@ -198,7 +202,11 @@ pub fn calculate_metrics(
     let mut total_cost = 0.0;
 
     for t in 0..n {
-        let pos_prev = if t == 0 { initial_position } else { positions[t - 1] };
+        let pos_prev = if t == 0 {
+            initial_position
+        } else {
+            positions[t - 1]
+        };
         let cost = turnover[t] * cost_per_side;
         total_cost += cost;
 
@@ -295,7 +303,9 @@ pub fn random_baseline_metrics(
 
     for s in signals.iter_mut() {
         // Simple 64-bit LCG
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let r = (state >> 62) as i32; // 0, 1, 2, 3
         *s = match r {
             0 => 1,

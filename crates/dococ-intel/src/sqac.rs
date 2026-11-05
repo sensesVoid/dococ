@@ -58,11 +58,7 @@ impl SqacAdapter {
     }
 
     /// Retrieve cases with timeout. Returns empty vec on timeout.
-    pub fn retrieve_with_timeout<F>(
-        &self,
-        fetch: F,
-        decision_time: i64,
-    ) -> Vec<SqacCase>
+    pub fn retrieve_with_timeout<F>(&self, fetch: F, decision_time: i64) -> Vec<SqacCase>
     where
         F: FnOnce() -> Vec<SqacCase>,
     {
@@ -99,8 +95,16 @@ mod tests {
     fn filter_before_removes_future_cases() {
         let adapter = SqacAdapter::new(SqacConfig::default());
         let cases = vec![
-            SqacCase { timestamp: 100, content: "old".into(), relevance: 0.8 },
-            SqacCase { timestamp: 200, content: "future".into(), relevance: 0.9 },
+            SqacCase {
+                timestamp: 100,
+                content: "old".into(),
+                relevance: 0.8,
+            },
+            SqacCase {
+                timestamp: 200,
+                content: "future".into(),
+                relevance: 0.9,
+            },
         ];
         let result = adapter.filter_before(cases, 150);
         assert_eq!(result.len(), 1);
@@ -111,8 +115,16 @@ mod tests {
     fn filter_removes_low_relevance() {
         let adapter = SqacAdapter::new(SqacConfig::default());
         let cases = vec![
-            SqacCase { timestamp: 100, content: "low".into(), relevance: 0.1 },
-            SqacCase { timestamp: 100, content: "high".into(), relevance: 0.8 },
+            SqacCase {
+                timestamp: 100,
+                content: "low".into(),
+                relevance: 0.1,
+            },
+            SqacCase {
+                timestamp: 100,
+                content: "high".into(),
+                relevance: 0.8,
+            },
         ];
         let result = adapter.filter_before(cases, 200);
         assert_eq!(result.len(), 1);
@@ -121,11 +133,26 @@ mod tests {
 
     #[test]
     fn select_top_limits_count() {
-        let adapter = SqacAdapter::new(SqacConfig { max_cases: 2, ..Default::default() });
+        let adapter = SqacAdapter::new(SqacConfig {
+            max_cases: 2,
+            ..Default::default()
+        });
         let cases = vec![
-            SqacCase { timestamp: 100, content: "a".into(), relevance: 0.5 },
-            SqacCase { timestamp: 200, content: "b".into(), relevance: 0.9 },
-            SqacCase { timestamp: 300, content: "c".into(), relevance: 0.7 },
+            SqacCase {
+                timestamp: 100,
+                content: "a".into(),
+                relevance: 0.5,
+            },
+            SqacCase {
+                timestamp: 200,
+                content: "b".into(),
+                relevance: 0.9,
+            },
+            SqacCase {
+                timestamp: 300,
+                content: "c".into(),
+                relevance: 0.7,
+            },
         ];
         let result = adapter.select_top(cases);
         assert_eq!(result.len(), 2);
@@ -134,11 +161,18 @@ mod tests {
 
     #[test]
     fn retrieve_with_timeout_returns_empty_on_timeout() {
-        let adapter = SqacAdapter::new(SqacConfig { timeout_ms: 1, ..Default::default() });
+        let adapter = SqacAdapter::new(SqacConfig {
+            timeout_ms: 1,
+            ..Default::default()
+        });
         let result = adapter.retrieve_with_timeout(
             || {
                 std::thread::sleep(std::time::Duration::from_millis(100));
-                vec![SqacCase { timestamp: 100, content: "late".into(), relevance: 0.9 }]
+                vec![SqacCase {
+                    timestamp: 100,
+                    content: "late".into(),
+                    relevance: 0.9,
+                }]
             },
             200,
         );
@@ -149,7 +183,13 @@ mod tests {
     fn retrieve_with_timeout_returns_cases() {
         let adapter = SqacAdapter::new(SqacConfig::default());
         let result = adapter.retrieve_with_timeout(
-            || vec![SqacCase { timestamp: 100, content: "case".into(), relevance: 0.8 }],
+            || {
+                vec![SqacCase {
+                    timestamp: 100,
+                    content: "case".into(),
+                    relevance: 0.8,
+                }]
+            },
             200,
         );
         assert_eq!(result.len(), 1);
@@ -163,7 +203,11 @@ mod tests {
 
     #[test]
     fn format_cases_nonempty() {
-        let cases = vec![SqacCase { timestamp: 100, content: "test case".into(), relevance: 0.8 }];
+        let cases = vec![SqacCase {
+            timestamp: 100,
+            content: "test case".into(),
+            relevance: 0.8,
+        }];
         let formatted = SqacAdapter::format_cases(&cases);
         assert!(formatted.contains("test case"));
     }

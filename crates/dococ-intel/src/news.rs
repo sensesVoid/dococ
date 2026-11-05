@@ -38,7 +38,10 @@ pub fn deduplicate(items: Vec<NewsItem>) -> Vec<NewsItem> {
 
 /// Filter news items to only those before the decision time.
 pub fn filter_before(items: Vec<NewsItem>, decision_time: i64) -> Vec<NewsItem> {
-    items.into_iter().filter(|i| i.timestamp < decision_time).collect()
+    items
+        .into_iter()
+        .filter(|i| i.timestamp < decision_time)
+        .collect()
 }
 
 /// Sort news items by relevance (descending) then timestamp (descending).
@@ -129,7 +132,10 @@ pub fn parse_economic_calendar(json: &str, now: i64) -> Vec<NewsItem> {
         let abs = pos + start;
         // Find the enclosing object.
         let obj_start = json[..abs].rfind('{').unwrap_or(abs);
-        let obj_end = json[abs..].find('}').map(|e| abs + e + 1).unwrap_or(json.len());
+        let obj_end = json[abs..]
+            .find('}')
+            .map(|e| abs + e + 1)
+            .unwrap_or(json.len());
         let block = &json[obj_start..obj_end];
         pos = obj_end;
 
@@ -165,7 +171,10 @@ pub fn parse_exchange_announcements(json: &str, source: &str) -> Vec<NewsItem> {
     while let Some(start) = json[pos..].find("\"title\"") {
         let abs = pos + start;
         let obj_start = json[..abs].rfind('{').unwrap_or(abs);
-        let obj_end = json[abs..].find('}').map(|e| abs + e + 1).unwrap_or(json.len());
+        let obj_end = json[abs..]
+            .find('}')
+            .map(|e| abs + e + 1)
+            .unwrap_or(json.len());
         let block = &json[obj_start..obj_end];
         pos = obj_end;
 

@@ -38,7 +38,11 @@ impl<S: Strategy> Replay<S> {
     }
 
     /// Feed a bar through the engine and record the decision.
-    pub fn feed_bar(&mut self, symbol: Symbol, bar: Bar) -> Result<Option<ReplayDecision>, Box<dyn std::error::Error>> {
+    pub fn feed_bar(
+        &mut self,
+        symbol: Symbol,
+        bar: Bar,
+    ) -> Result<Option<ReplayDecision>, Box<dyn std::error::Error>> {
         self.events.push(ReplayEvent::Bar {
             symbol: symbol.clone(),
             bar: bar.clone(),

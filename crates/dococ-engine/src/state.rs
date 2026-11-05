@@ -137,9 +137,12 @@ impl StateBuilder {
         if let Some(brief) = &self.llm_brief {
             parts.push(format!(
                 "LLM: regime={} bias={} risk={} corr={} conf={:.2} as_of={}",
-                brief.regime, brief.news_bias, brief.event_risk,
+                brief.regime,
+                brief.news_bias,
+                brief.event_risk,
                 if brief.correlation_flag { "yes" } else { "no" },
-                brief.confidence, brief.as_of
+                brief.confidence,
+                brief.as_of
             ));
         }
 

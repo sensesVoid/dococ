@@ -14,7 +14,15 @@ pub struct AuditEntry {
 }
 
 impl AuditEntry {
-    pub fn new(prompt: &str, response: &str, model: &str, as_of: i64, stale: bool, valid: bool, latency_ms: u64) -> Self {
+    pub fn new(
+        prompt: &str,
+        response: &str,
+        model: &str,
+        as_of: i64,
+        stale: bool,
+        valid: bool,
+        latency_ms: u64,
+    ) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()

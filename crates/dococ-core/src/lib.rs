@@ -87,12 +87,25 @@ pub struct Order {
 }
 
 impl Order {
-    pub fn new(id: u64, symbol: Symbol, side: Side, quantity: f64, price: Option<f64>, created_at: i64) -> Self {
+    pub fn new(
+        id: u64,
+        symbol: Symbol,
+        side: Side,
+        quantity: f64,
+        price: Option<f64>,
+        created_at: i64,
+    ) -> Self {
         Self {
             id,
             symbol,
             side,
-            order_type: if price.is_some() { OrderType::Limit { price: price.unwrap() } } else { OrderType::Market },
+            order_type: if price.is_some() {
+                OrderType::Limit {
+                    price: price.unwrap(),
+                }
+            } else {
+                OrderType::Market
+            },
             quantity,
             price,
             state: OrderState::New,
@@ -134,7 +147,11 @@ pub struct Position {
 
 impl Position {
     pub fn new(symbol: Symbol) -> Self {
-        Self { symbol, quantity: 0.0, avg_price: 0.0 }
+        Self {
+            symbol,
+            quantity: 0.0,
+            avg_price: 0.0,
+        }
     }
 
     pub fn market_value(&self, price: f64) -> f64 {
@@ -222,11 +239,28 @@ impl Account {
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    MarketData { symbol: Symbol, bar: Bar, timestamp: i64 },
-    OrderUpdate { order_id: u64, state: OrderState, filled_qty: f64, price: f64 },
-    Timer { name: String, timestamp: i64 },
-    LlmBrief { brief: String, timestamp: i64 },
-    Tick { timestamp: i64 },
+    MarketData {
+        symbol: Symbol,
+        bar: Bar,
+        timestamp: i64,
+    },
+    OrderUpdate {
+        order_id: u64,
+        state: OrderState,
+        filled_qty: f64,
+        price: f64,
+    },
+    Timer {
+        name: String,
+        timestamp: i64,
+    },
+    LlmBrief {
+        brief: String,
+        timestamp: i64,
+    },
+    Tick {
+        timestamp: i64,
+    },
 }
 
 pub trait Clock: Send + Sync {
@@ -313,7 +347,9 @@ mod tests {
 
     #[test]
     fn fixed_clock_returns_time() {
-        let clock = FixedClock { time: 1_700_000_000 };
+        let clock = FixedClock {
+            time: 1_700_000_000,
+        };
         assert_eq!(clock.now(), 1_700_000_000);
     }
 

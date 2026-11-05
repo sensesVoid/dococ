@@ -96,7 +96,9 @@ impl RiskGuardian {
                 return RiskDecision::Reject("notional cap exceeded");
             }
             let max_qty = remaining / trade.price;
-            return RiskDecision::Cap { max_quantity: max_qty };
+            return RiskDecision::Cap {
+                max_quantity: max_qty,
+            };
         }
 
         // Per-trade risk check (if stop loss is provided).
@@ -106,7 +108,9 @@ impl RiskGuardian {
             if stop_distance > 0.0 {
                 let max_qty = risk_amount / stop_distance;
                 if trade.quantity > max_qty {
-                    return RiskDecision::Cap { max_quantity: max_qty };
+                    return RiskDecision::Cap {
+                        max_quantity: max_qty,
+                    };
                 }
             }
         }

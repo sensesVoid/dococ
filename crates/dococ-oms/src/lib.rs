@@ -420,7 +420,10 @@ mod tests {
 
         let issues = mgr.reconcile_positions(&venue_positions);
         assert_eq!(issues.len(), 1);
-        assert!(matches!(issues[0], ReconcileIssue::MissingVenuePosition { .. }));
+        assert!(matches!(
+            issues[0],
+            ReconcileIssue::MissingVenuePosition { .. }
+        ));
     }
 
     #[test]
@@ -432,6 +435,9 @@ mod tests {
 
         let issues = mgr.reconcile_positions(&venue_positions);
         assert_eq!(issues.len(), 1);
-        assert!(matches!(issues[0], ReconcileIssue::UntrackedVenuePosition { .. }));
+        assert!(matches!(
+            issues[0],
+            ReconcileIssue::UntrackedVenuePosition { .. }
+        ));
     }
 }

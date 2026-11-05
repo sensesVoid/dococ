@@ -1,13 +1,14 @@
 use dococ_core::{Account, Bar, Clock, Event, FixedClock, Instrument, Order, Side, Symbol};
-use dococ_laya::{LayaRuntime, OrderAction, validate_action, ActionValidation, ModelCache};
+use dococ_laya::{ActionValidation, LayaRuntime, ModelCache, OrderAction, validate_action};
 use dococ_oms::OrderManager;
-use dococ_risk::{AccountState, RiskConfig, RiskGuardian, PositionSizer, SizingConfig};
+use dococ_risk::{AccountState, PositionSizer, RiskConfig, RiskGuardian, SizingConfig};
 use dococ_venue::SimVenue;
 
 /// Strategy interface: pluggable decision logic.
+/// Returns (action, confidence).
 pub trait Strategy: Send {
     fn name(&self) -> &str;
-    fn decide(&mut self, state: &str) -> Result<OrderAction, Box<dyn std::error::Error>>;
+    fn decide(&mut self, state: &str) -> Result<(OrderAction, f64), Box<dyn std::error::Error>>;
 }
 
 /// Laya-based strategy.
@@ -26,9 +27,9 @@ impl Strategy for LayaStrategy {
         "laya"
     }
 
-    fn decide(&mut self, state: &str) -> Result<OrderAction, Box<dyn std::error::Error>> {
+    fn decide(&mut self, state: &str) -> Result<(OrderAction, f64), Box<dyn std::error::Error>> {
         let decision = self.runtime.decide(state)?;
-        Ok(decision.action)
+        Ok((decision.action, decision.action_confidence))
     }
 }
 
@@ -98,6 +99,9 @@ pub struct TickResult {
     pub target_qty: f64,
 }
 
+/// Maximum state size in tokens (design: 500-700).
+pub const MAX_STATE_TOKENS: usize = 700;
+
 /// The daemon engine.
 pub struct Engine<S: Strategy> {
     strategy: S,
@@ -137,7 +141,11 @@ impl<S: Strategy> Engine<S> {
     }
 
     /// Process a market data bar.
-    pub fn on_bar(&mut self, bar: &Bar, symbol: &Symbol) -> Result<Option<TickResult>, Box<dyn std::error::Error>> {
+    pub fn on_bar(
+        &mut self,
+        bar: &Bar,
+        symbol: &Symbol,
+    ) -> Result<Option<TickResult>, Box<dyn std::error::Error>> {
         let now = bar.timestamp;
         self.scheduler.mark_bar(now);
 
@@ -145,18 +153,29 @@ impl<S: Strategy> Engine<S> {
             return Ok(None);
         }
 
-        // Build state text (simplified for now).
-        let state = format!(
-            "Account: equity {}. Position: {}. Market: {} price {}. Regime: unknown.",
-            self.account.equity,
-            self.account.get_position(symbol).map(|p| p.quantity).unwrap_or(0.0),
-            symbol,
-            bar.close
-        );
+        // Build the compact state via StateBuilder.
+        let mut sb = StateBuilder::default();
+        sb.position = self.account.get_position(symbol).cloned();
+        sb.bars = vec![bar.clone()];
+        if let Some(brief) = &self.llm_brief {
+            sb.llm_brief = Some(LlmBrief {
+                regime: brief.clone(),
+                news_bias: "unknown".to_string(),
+                event_risk: "unknown".to_string(),
+                correlation_flag: false,
+                confidence: 0.0,
+                as_of: now,
+            });
+        }
+        let state = sb.build();
+        if sb.token_count() > MAX_STATE_TOKENS {
+            // State exceeded the token budget; block the trade rather than truncate.
+            return Ok(None);
+        }
 
         // Run strategy with timing check.
         let start = std::time::Instant::now();
-        let mut action = self.strategy.decide(&state)?;
+        let (mut action, confidence) = self.strategy.decide(&state)?;
         let elapsed = start.elapsed();
         if elapsed.as_millis() as u64 > self.timeout.infer_ms {
             // Inference took too long; fall back to NO_ACTION to prevent trading on stale state.
@@ -171,20 +190,24 @@ impl<S: Strategy> Engine<S> {
             OrderAction::NoAction => "NO_ACTION",
             OrderAction::Close => "CLOSE",
         };
-        let action = if dococ_laya::validate_action(action_str) == dococ_laya::ActionValidation::Valid {
-            action
-        } else {
-            OrderAction::NoAction
-        };
+        let action =
+            if dococ_laya::validate_action(action_str) == dococ_laya::ActionValidation::Valid {
+                action
+            } else {
+                OrderAction::NoAction
+            };
 
-        // Get confidence from Laya (simplified - in real impl, strategy returns confidence too).
-        let confidence = 0.5;
+        // Get confidence from the strategy (Laya action_confidence).
 
         // Risk check.
         let trade_notional = self.account.equity * 0.01; // 1% notional
         let proposed = dococ_risk::ProposedTrade {
             side: if action == OrderAction::Long || action == OrderAction::Short {
-                if action == OrderAction::Long { dococ_risk::Side::Long } else { dococ_risk::Side::Short }
+                if action == OrderAction::Long {
+                    dococ_risk::Side::Long
+                } else {
+                    dococ_risk::Side::Short
+                }
             } else {
                 dococ_risk::Side::Long
             },
@@ -194,11 +217,17 @@ impl<S: Strategy> Engine<S> {
             notional: trade_notional,
         };
 
+        let open_notional: f64 = self
+            .account
+            .positions
+            .values()
+            .map(|p| p.quantity.abs() * p.avg_price)
+            .sum();
         let acct_state = AccountState {
             equity: self.account.equity,
             daily_pnl: self.account.daily_pnl,
             peak_equity: self.account.peak_equity,
-            open_notional: 0.0,
+            open_notional,
         };
 
         let risk_decision = if action == OrderAction::Long || action == OrderAction::Short {
@@ -210,7 +239,9 @@ impl<S: Strategy> Engine<S> {
         // Sizing: volatility target + confidence + guardian headroom.
         let vol = 0.02; // placeholder; in production, use GARCH forecast
         let headroom = self.account.equity * 1.0; // 1x notional cap
-        let sized_qty = self.sizer.size(self.account.equity, vol, confidence, bar.close, headroom);
+        let sized_qty = self
+            .sizer
+            .size(self.account.equity, vol, confidence, bar.close, headroom);
         let target_qty = match action {
             OrderAction::Long => sized_qty,
             OrderAction::Short => -sized_qty,
@@ -248,6 +279,11 @@ impl<S: Strategy> Engine<S> {
         &self.account
     }
 
+    /// Cache a model in the LRU (for loading additional models).
+    pub fn cache_model(&mut self, name: &str) {
+        self.model_cache.insert(name);
+    }
+
     /// Get the OMS.
     pub fn oms(&self) -> &OrderManager {
         &self.oms
@@ -255,6 +291,9 @@ impl<S: Strategy> Engine<S> {
 
     /// Get the venue.
     /// Run a CPU-heavy decision task off the event loop using spawn_blocking.
+    /// For async/external callers. The synchronous `on_bar` tick calls the
+    /// strategy directly and enforces `InferenceTimeout` post-hoc (falls back
+    /// to NO_ACTION when exceeded).
     pub fn decide_blocking<F>(f: F, timeout_ms: u64) -> Result<OrderAction, &'static str>
     where
         F: FnOnce() -> OrderAction + Send + 'static,
@@ -344,11 +383,43 @@ mod tests {
         assert!(result.is_some());
     }
 
+    #[test]
+    fn engine_tick_blocks_when_state_exceeds_token_budget() {
+        let venue = SimVenue::new(100_000.0, 5.0);
+        let account = Account::new(AccountId(1), 100_000.0);
+        let scheduler = Scheduler::new(900, 1);
+        let mut engine = Engine::new(
+            DummyStrategy,
+            RiskConfig::default(),
+            venue,
+            account,
+            scheduler,
+        );
+        // 5000 chars ~= 1250 tokens > MAX_STATE_TOKENS.
+        engine.on_llm_brief("x".repeat(5000), 1_700_000_000);
+        let bar = Bar {
+            timestamp: 1_700_000_000,
+            open: 64_000.0,
+            high: 64_500.0,
+            low: 63_800.0,
+            close: 64_200.0,
+            volume: 1_000.0,
+        };
+        let symbol = Symbol::new("BTCUSDT");
+        let result = engine.on_bar(&bar, &symbol).expect("tick");
+        assert!(result.is_none(), "oversized state must block the trade");
+    }
+
     struct DummyStrategy;
     impl Strategy for DummyStrategy {
-        fn name(&self) -> &str { "dummy" }
-        fn decide(&mut self, _state: &str) -> Result<OrderAction, Box<dyn std::error::Error>> {
-            Ok(OrderAction::Hold)
+        fn name(&self) -> &str {
+            "dummy"
+        }
+        fn decide(
+            &mut self,
+            _state: &str,
+        ) -> Result<(OrderAction, f64), Box<dyn std::error::Error>> {
+            Ok((OrderAction::Hold, 0.5))
         }
     }
 

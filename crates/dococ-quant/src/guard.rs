@@ -3,9 +3,20 @@ use dococ_core::Bar;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StaleGuardError {
     EmptyBars,
-    StaleTimestamp { last_ts: i64, now: i64, diff_secs: i64 },
-    FutureTimestamp { last_ts: i64, now: i64 },
-    GapDetected { prev_ts: i64, next_ts: i64, gap_secs: i64 },
+    StaleTimestamp {
+        last_ts: i64,
+        now: i64,
+        diff_secs: i64,
+    },
+    FutureTimestamp {
+        last_ts: i64,
+        now: i64,
+    },
+    GapDetected {
+        prev_ts: i64,
+        next_ts: i64,
+        gap_secs: i64,
+    },
     InvalidValues(String),
 }
 
@@ -56,14 +67,33 @@ impl StaleDataGuard {
         let max_gap = (self.expected_interval_secs as f64 * 1.5) as i64;
 
         for (i, bar) in bars.iter().enumerate() {
-            if !bar.open.is_finite() || !bar.high.is_finite() || !bar.low.is_finite() || !bar.close.is_finite() || !bar.volume.is_finite() {
-                return Err(StaleGuardError::InvalidValues(format!("non-finite values at index {}", i)));
+            if !bar.open.is_finite()
+                || !bar.high.is_finite()
+                || !bar.low.is_finite()
+                || !bar.close.is_finite()
+                || !bar.volume.is_finite()
+            {
+                return Err(StaleGuardError::InvalidValues(format!(
+                    "non-finite values at index {}",
+                    i
+                )));
             }
-            if bar.open <= 0.0 || bar.high <= 0.0 || bar.low <= 0.0 || bar.close <= 0.0 || bar.volume < 0.0 {
-                return Err(StaleGuardError::InvalidValues(format!("non-positive prices or negative volume at index {}", i)));
+            if bar.open <= 0.0
+                || bar.high <= 0.0
+                || bar.low <= 0.0
+                || bar.close <= 0.0
+                || bar.volume < 0.0
+            {
+                return Err(StaleGuardError::InvalidValues(format!(
+                    "non-positive prices or negative volume at index {}",
+                    i
+                )));
             }
             if bar.high < bar.low {
-                return Err(StaleGuardError::InvalidValues(format!("high < low at index {}", i)));
+                return Err(StaleGuardError::InvalidValues(format!(
+                    "high < low at index {}",
+                    i
+                )));
             }
 
             if i > 0 {
@@ -85,7 +115,10 @@ impl StaleDataGuard {
     pub fn check_features(&self, features: &[f64]) -> Result<(), StaleGuardError> {
         for (i, &f) in features.iter().enumerate() {
             if !f.is_finite() {
-                return Err(StaleGuardError::InvalidValues(format!("feature at index {} is non-finite: {}", i, f)));
+                return Err(StaleGuardError::InvalidValues(format!(
+                    "feature at index {} is non-finite: {}",
+                    i, f
+                )));
             }
         }
         Ok(())
@@ -144,7 +177,13 @@ mod tests {
         let bars = vec![sample_bar(20000, 50000.0)];
         let now = 10000; // bar timestamp is ahead of now by 10000s
         let err = guard.check_bars(&bars, now).unwrap_err();
-        assert_eq!(err, StaleGuardError::FutureTimestamp { last_ts: 20000, now: 10000 });
+        assert_eq!(
+            err,
+            StaleGuardError::FutureTimestamp {
+                last_ts: 20000,
+                now: 10000
+            }
+        );
     }
 
     #[test]
