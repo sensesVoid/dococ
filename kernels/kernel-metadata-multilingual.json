@@ -1,0 +1,15 @@
+{
+  "id": "sensesvoid/doc-oc-btc-fine-tune-multilingual",
+  "title": "Doc Oc BTC Fine-Tune Multilingual",
+  "code_file": "finetune_btc_multilingual.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": [
+    "sensesvoid/doc-oc-btc-dataset"
+  ]
+}

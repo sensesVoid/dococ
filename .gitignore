@@ -45,3 +45,5 @@ AGENTS.md
 
 export_out*.txt
 parity_*.json
+
+kernels_ml/
