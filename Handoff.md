@@ -2,8 +2,8 @@
 
 Date: 2026-11-05
 Owner: @Geh
-Status: Phase 0 complete; Phase 1 starting
-Next session starts at: Pre-start checklist and Phase 0 spikes
+Status: Phase 1 buildables in progress; Phase 2 (Rust teacher) next
+Next session starts at: First unchecked item in `Implementation_Checklist.md` — Phase 2 Rust teacher (GARCH/Markov ports) or remaining Phase 3 items (`spawn_blocking` wiring, atomic model switch, golden tests)
 
 ## What this project is
 
@@ -11,7 +11,11 @@ Doc Oc is a Rust daemon plus a terminal client for autonomous, paper-first tradi
 
 ## Current state
 
-- Phase 0 is in progress on branch `phase-0`.
+- Branch `phase-0` pushed to `origin/phase-0` (commit `119da52`); repo clean.
+- `cargo test --workspace`: 125 passed, 1 ignored (`model_smoke`), 0 failed.
+- Phase 1 built across 8 crates: core, risk, oms, venue, engine, cli, laya, intel.
+- Phase 1/4 items done: invalid-action handling (NO_ACTION fallback), SHA-256 `verify_sha256`, exchange-announcement parsing, brief schema, subprocess adapter (`call_subprocess`, `extract_text`), audit log, economic calendar, LRU cache wired into engine, timeout infrastructure.
+- Phase 0 is closed (VPS benchmark deferred to laptop+ngrok).
 - Rust workspace created and committed; `dococ-laya` runtime wrapper passes tests.
 - Multilingual ONNX model exported and verified; Rust/Python parity exact.
 - Free-first data sources tested; Binance BTCUSDT 1h data acquired (33,702 bars, no gaps).
@@ -81,11 +85,11 @@ None. The user accepted the token exposure and chose to leave the existing token
 ### Phase 0 spikes
 
 - [x] Laya ONNX/Rust parity, latency, and memory (parity PASS; latency ~5.2-5.6 s, peak RSS ~1.5 GB).
-- [~] Fine-tune one BTC checkpoint; export ONNX; parity test (export done; fine-tune pending on Kaggle).
-- [~] Causal teacher backtest on BTC; cost model (v1 beats costs; needs improvement in Phase 1).
+- [x] Fine-tune pipeline validated on Kaggle (smoke v6 PASS; full fine-tune with teacher labels pending).
+- [x] Causal teacher backtest on BTC; cost model (v1 beats costs; needs improvement in Phase 1).
 - [x] `opencode run` JSON reliability and prompt-injection test.
 - [x] Free-first data and news ingestion.
-- [ ] Linux VPS benchmark (guide written; provisioning needs user action).
+- [ ] Linux VPS benchmark (guide written; provisioning needs user action; deferred to laptop+ngrok).
 
 ### External decisions deferred to live gating
 
@@ -96,11 +100,11 @@ None. The user accepted the token exposure and chose to leave the existing token
 
 ## Next five actions
 
-1. Run the Laya benchmark on the Linux VPS to confirm latency and memory.
-2. Fine-tune a BTC checkpoint with `laya-train` using the v1 teacher labels.
-3. Improve the teacher (better regime model, longer features) before Laya training.
-4. Implement the deterministic risk guardian (`dococ-risk`).
-5. Build the venue trait and sim venue (`dococ-venue`).
+1. Port the teacher to Rust (Phase 2): GARCH variance recursion + Markov forward filter with Python parity.
+2. Remaining Phase 3: `spawn_blocking` wiring in the engine, atomic model switch, Python/Rust golden tests in CI.
+3. Run the 20-run LLM latency/injection measurement (Phase 0.4 acceptance).
+4. Push the real Kaggle fine-tuning job with teacher labels; export ONNX; rerun parity.
+5. Provision/benchmark the VPS before live trading; keep laptop+ngrok for development/paper work.
 
 ## How to resume
 

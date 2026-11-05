@@ -3,7 +3,7 @@
 - Laya is ConvAI Innovations' Apache-2.0 non-autoregressive decision model.
 - Checkpoints: English 421M/512 context; multilingual 322M/1024 (up to 8192); typed-decisions 421M/1024.
 - Primitives: `choice`, `score`, `noul`; one forward pass; no text generation.
-- CPU inference roughly 100-450 ms; about 33 ms on a T4.
+- CPU inference on the dev laptop measured roughly 5.2-5.6 s warm per decision, not 100-450 ms; about 33 ms on a T4.
 - Base checkpoints are near chance on specialized decisions; fine-tuning is mandatory.
 - `laya-train` accepts CSV/JSONL with `state`, `questions`, and `expected` or `gold`; supports RLCD/soft-CE, calibration, and `--freeze-encoder`.
 - Kaggle 2xT4 full fine-tune is roughly 4-5 hours for about 30k questions.
@@ -13,6 +13,7 @@
 - Use `answer_confidence`, not `action.act_probability`.
 - `noul` can follow labels rather than state; use a 2-option choice with neutral keys if needed.
 - Calibration is mandatory; shipped models are overconfident.
+- Implemented in Rust: `LayaRuntime` (load/load_with_threads/decide), LRU `ModelCache` wired into `dococ-engine`, `ModelRegistry` with `verify_sha256` (sha2 0.11 hex helper); atomic model switch still pending.
 
 ## Decisions
 

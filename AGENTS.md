@@ -11,8 +11,10 @@ Manual snapshot generated from `.agent_context/memory/` because `context-janitor
 
 ## Current state
 
-- Phase 1 in progress. All 7 Rust crates implemented with 60+ tests passing.
-- Laya ONNX parity verified. Teacher v1 beats costs. Kaggle fine-tune pipeline validated.
+- Phase 1 in progress; Phase 2 (Rust teacher) is the next buildable. All 8 Rust crates implemented (`dococ-core`, `dococ-risk`, `dococ-oms`, `dococ-venue`, `dococ-engine`, `dococ-cli`, `dococ-laya`, `dococ-intel`) with 125 tests passing, 1 ignored (`model_smoke`).
+- Laya ONNX parity verified. Teacher v1 beats costs. Kaggle fine-tune pipeline validated (smoke v6 PASS).
+- `dococ-intel` implements the `opencode run` subprocess adapter, brief schema, news sources (RSS, exchange announcements, economic calendar, GDELT throttle), SQAC time-filtered retrieval, and audit log.
+- Branch `phase-0` pushed to `origin/phase-0` (https://github.com/sensesVoid/dococ.git), commit `119da52`.
 - VPS deferred to laptop+ngrok for development.
 - Tokens left as-is per user decision.
 

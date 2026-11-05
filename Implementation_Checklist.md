@@ -51,9 +51,9 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 ### 0.4 LLM CLI spike
 
 - [x] Verify `opencode run` supports non-interactive, single-shot JSON output.
-- [ ] Define the brief schema: macro regime, news bias, event risk, correlation flag, confidence, as-of, sources.
+- [x] Define the brief schema: macro regime, news bias, event risk, correlation flag, confidence, as-of, sources. (`dococ-intel::LlmBrief` + `brief.rs` schema, 6 tests.)
 - [ ] Measure latency, failure rate, and JSON validity over 20 runs.
-- [x] Add timeout, retry, schema validation, and stale-brief fallback. (Design complete; code pending.)
+- [x] Add timeout, retry, schema validation, and stale-brief fallback. (Implemented: `call_subprocess` timeout, `extract_text`, `parse_response` validation, `is_stale`.)
 - [x] Test prompt injection with malicious headlines; confirm no tool access and no order authority.
 
 **Acceptance:** At least 19/20 valid JSON responses within the timeout; no tool calls; stale brief cannot cause a trade.
@@ -62,7 +62,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 - [x] BTC: exchange REST/WebSocket klines; historical archive; gap and timestamp checks.
 - [ ] Gold: broker/CME or delayed data; contract specs; session and roll checks.
-- [x] News: GDELT, publisher RSS, exchange announcements, economic calendar; dedupe and timestamp. (RSS, economic calendar, GDELT rate limiter done.)
+- [x] News: GDELT, publisher RSS, exchange announcements, economic calendar; dedupe and timestamp. (RSS, exchange announcements (`parse_exchange_announcements`), economic calendar, and GDELT rate limiter implemented in `dococ-intel`.)
 - [ ] Store raw data with source and ingestion time; no lookahead in historical joins.
 
 **Acceptance:** Both assets have clean, timestamped data for backtest and paper; news items are deduplicated and time-ordered.
@@ -104,10 +104,10 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 ## Phase 3 - Laya runtime and state
 
 - [x] State schema v1: deterministic ordering, units, NA sentinels, token counter, template hash.
-- [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading done; LRU cache done; spawn_blocking and timeouts pending.)
-- [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema done; invalid-action handling pending.)
-- [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya.
-- [x] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry implemented; SHA-256 verification and atomic switch pending.)
+- [~] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading, LRU cache (wired into `dococ-engine`), timeout infrastructure (`run_with_timeout`, `InferenceTimeout`) done; `spawn_blocking` wiring in engine still pending.)
+- [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema, `validate_action`, and invalid-action-as-NO_ACTION handling in engine tick done.)
+- [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya. (`PositionSizer` wired into engine tick.)
+- [~] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry, SHA-256 verification (`verify_sha256`, sha2 hex helper), and rollback support done; atomic switch still pending.)
 - [ ] Python/Rust golden tests in CI.
 
 **Gate 3:** BTC runs end-to-end in replay with a fine-tuned checkpoint; state never exceeds the token budget; invalid actions are logged and treated as NO_ACTION; p95 under 2 seconds.
