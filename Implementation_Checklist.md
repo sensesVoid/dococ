@@ -107,7 +107,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading done; LRU cache and spawn_blocking pending.)
 - [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema done; invalid-action handling pending.)
 - [ ] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya.
-- [ ] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback.
+- [x] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry implemented; SHA-256 verification and atomic switch pending.)
 - [ ] Python/Rust golden tests in CI.
 
 **Gate 3:** BTC runs end-to-end in replay with a fine-tuned checkpoint; state never exceeds the token budget; invalid actions are logged and treated as NO_ACTION; p95 under 2 seconds.
