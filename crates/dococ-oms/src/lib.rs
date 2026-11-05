@@ -23,6 +23,7 @@ pub struct Order {
     pub state: OrderState,
     pub filled_quantity: f64,
     pub avg_fill_price: f64,
+    pub idempotency_key: Option<String>,
 }
 
 impl Order {
@@ -36,7 +37,13 @@ impl Order {
             state: OrderState::New,
             filled_quantity: 0.0,
             avg_fill_price: 0.0,
+            idempotency_key: None,
         }
+    }
+
+    pub fn with_key(mut self, key: String) -> Self {
+        self.idempotency_key = Some(key);
+        self
     }
 
     pub fn mark_working(&mut self) {
@@ -56,7 +63,6 @@ impl Order {
         } else {
             self.filled_quantity = new_filled;
         }
-        // Update average fill price.
         if self.filled_quantity > 0.0 {
             self.avg_fill_price = (self.avg_fill_price * (self.filled_quantity - quantity)
                 + price * quantity)
@@ -86,6 +92,7 @@ impl Order {
 pub struct OrderManager {
     orders: Vec<Order>,
     next_id: u64,
+    key_index: std::collections::HashMap<String, u64>,
 }
 
 impl OrderManager {
@@ -93,13 +100,33 @@ impl OrderManager {
         Self {
             orders: Vec::new(),
             next_id: 1,
+            key_index: std::collections::HashMap::new(),
         }
     }
 
-    pub fn create_order(&mut self, symbol: &str, side: Side, quantity: f64, price: f64) -> u64 {
+    pub fn create_order(
+        &mut self,
+        symbol: &str,
+        side: Side,
+        quantity: f64,
+        price: f64,
+        idempotency_key: Option<&str>,
+    ) -> u64 {
+        // Check for existing order with the same key.
+        if let Some(key) = idempotency_key {
+            if let Some(&existing_id) = self.key_index.get(key) {
+                return existing_id;
+            }
+        }
+
         let id = self.next_id;
         self.next_id += 1;
-        self.orders.push(Order::new(id, symbol, side, quantity, price));
+        let mut order = Order::new(id, symbol, side, quantity, price);
+        if let Some(key) = idempotency_key {
+            order.idempotency_key = Some(key.to_string());
+            self.key_index.insert(key.to_string(), id);
+        }
+        self.orders.push(order);
         id
     }
 
@@ -109,6 +136,16 @@ impl OrderManager {
 
     pub fn get_mut(&mut self, id: u64) -> Option<&mut Order> {
         self.orders.iter_mut().find(|o| o.id == id)
+    }
+
+    pub fn find_by_key(&self, key: &str) -> Option<&Order> {
+        self.key_index
+            .get(key)
+            .and_then(|&id| self.orders.iter().find(|o| o.id == id))
+    }
+
+    pub fn orders(&self) -> &[Order] {
+        &self.orders
     }
 
     pub fn working_orders(&self) -> Vec<&Order> {
@@ -132,12 +169,31 @@ impl OrderManager {
             }
         }
     }
+
+    /// Reconcile: update local state from venue fills.
+    pub fn reconcile(&mut self, fills: &[crate::Fill]) {
+        for fill in fills {
+            // Find the order by id (if we tracked it).
+            // For now, just log; full reconciliation in Phase 2.
+        }
+    }
 }
 
 impl Default for OrderManager {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// Re-export Fill from dococ-core? For now, define locally.
+#[derive(Debug, Clone)]
+pub struct Fill {
+    pub order_id: u64,
+    pub symbol: String,
+    pub side: Side,
+    pub quantity: f64,
+    pub price: f64,
+    pub timestamp: i64,
 }
 
 #[cfg(test)]
@@ -187,7 +243,7 @@ mod tests {
     #[test]
     fn order_manager_creates_and_tracks() {
         let mut mgr = OrderManager::new();
-        let id = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0);
+        let id = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, None);
         assert!(mgr.get(id).is_some());
         assert_eq!(mgr.get(id).unwrap().state, OrderState::New);
     }
@@ -195,8 +251,8 @@ mod tests {
     #[test]
     fn order_manager_cancel_all() {
         let mut mgr = OrderManager::new();
-        let id1 = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0);
-        let id2 = mgr.create_order("BTCUSDT", Side::Sell, 0.05, 64_000.0);
+        let id1 = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, None);
+        let id2 = mgr.create_order("BTCUSDT", Side::Sell, 0.05, 64_000.0, None);
         if let Some(o) = mgr.get_mut(id1) {
             o.mark_working();
         }
@@ -206,5 +262,47 @@ mod tests {
         mgr.cancel_all();
         assert_eq!(mgr.get(id1).unwrap().state, OrderState::Canceled);
         assert_eq!(mgr.get(id2).unwrap().state, OrderState::Canceled);
+    }
+
+    #[test]
+    fn idempotent_key_prevents_duplicate() {
+        let mut mgr = OrderManager::new();
+        let id1 = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, Some("key-1"));
+        let id2 = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, Some("key-1"));
+        assert_eq!(id1, id2);
+        assert_eq!(mgr.orders().len(), 1);
+    }
+
+    #[test]
+    fn different_keys_create_different_orders() {
+        let mut mgr = OrderManager::new();
+        let id1 = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, Some("key-1"));
+        let id2 = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, Some("key-2"));
+        assert_ne!(id1, id2);
+        assert_eq!(mgr.orders().len(), 2);
+    }
+
+    #[test]
+    fn no_key_always_creates_new() {
+        let mut mgr = OrderManager::new();
+        let id1 = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, None);
+        let id2 = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, None);
+        assert_ne!(id1, id2);
+        assert_eq!(mgr.orders().len(), 2);
+    }
+
+    #[test]
+    fn idempotent_lookup_by_key() {
+        let mut mgr = OrderManager::new();
+        let id = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, Some("key-1"));
+        let found = mgr.find_by_key("key-1");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, id);
+    }
+
+    #[test]
+    fn unknown_key_returns_none() {
+        let mgr = OrderManager::new();
+        assert!(mgr.find_by_key("unknown").is_none());
     }
 }
