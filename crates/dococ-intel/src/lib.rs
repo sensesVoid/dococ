@@ -159,6 +159,9 @@ fn extract_number_field(json: &str, field: &str) -> Option<f64> {
     val[..end].parse().ok()
 }
 
+mod news;
+pub use news::*;
+
 #[cfg(test)]
 mod tests {
     use super::*;
