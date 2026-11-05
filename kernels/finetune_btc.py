@@ -26,11 +26,15 @@ print("laya-train verified")
 
 DATA = "/kaggle/input/doc-oc-btc-dataset/train.jsonl"
 if not os.path.exists(DATA):
-    print(f"Dataset not found at {DATA}; inputs present:")
-    for root, dirs, files in os.walk("/kaggle/input"):
-        for f in files[:10]:
-            print(os.path.join(root, f))
-    sys.exit(2)
+    alt = "/kaggle/input/datasets/sensesvoid/doc-oc-btc-dataset/train.jsonl"
+    if os.path.exists(alt):
+        DATA = alt
+    else:
+        print(f"Dataset not found at {DATA}; inputs present:")
+        for root, dirs, files in os.walk("/kaggle/input"):
+            for f in files[:10]:
+                print(os.path.join(root, f))
+        sys.exit(2)
 
 with open(DATA) as f:
     rows = [json.loads(line) for line in f]
