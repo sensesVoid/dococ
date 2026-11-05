@@ -43,6 +43,45 @@ impl ShadowLog {
     }
 }
 
+/// Run a real shadow pass: replay the last `limit` bars of `csv_path`
+/// through the Laya model, logging decisions. Never places orders.
+pub fn run_shadow(
+    model_dir: &std::path::Path,
+    csv_path: &std::path::Path,
+    limit: usize,
+    symbol: &str,
+) -> Result<ShadowLog, String> {
+    use dococ_laya::LayaRuntime;
+    let runtime = LayaRuntime::load(model_dir).map_err(|e| format!("load: {e}"))?;
+    let text = std::fs::read_to_string(csv_path).map_err(|e| format!("read csv: {e}"))?;
+    let mut bars: Vec<(i64, f64)> = Vec::new();
+    for line in text.lines().skip(1) {
+        let cols: Vec<&str> = line.split(',').collect();
+        if cols.len() > 7 {
+            if let (Ok(ts), Ok(close)) = (cols[0].parse::<i64>(), cols[4].parse::<f64>()) {
+                bars.push((ts / 1000, close));
+            }
+        }
+    }
+    let start = bars.len().saturating_sub(limit);
+    let mut log = ShadowLog::new();
+    for (ts, close) in &bars[start..] {
+        let state = format!(
+            "Account: paper. Equity 100000 USD. Position: flat. Market: {symbol} perpetual. Last price {close:.0}."
+        );
+        let decision = runtime.decide(&state).map_err(|e| format!("decide: {e}"))?;
+        log.record(ShadowRecord {
+            timestamp: *ts,
+            symbol: symbol.to_string(),
+            action: decision.action,
+            confidence: decision.action_confidence,
+            price: *close,
+            note: "shadow".to_string(),
+        });
+    }
+    Ok(log)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

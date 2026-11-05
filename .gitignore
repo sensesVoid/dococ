@@ -51,3 +51,5 @@ kernels_out_ml/
 
 kernels_out_ml*/
 export_ml*.txt
+
+shadow_*.json

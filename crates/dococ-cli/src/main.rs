@@ -133,14 +133,41 @@ fn main() {
             println!("Paper trading: {} (daemon not connected)", asset);
         }
         Some(Commands::Shadow { asset, bars }) => {
-            println!(
-                "Shadow mode: {} over {} decision(s) (logging only, never orders)",
-                asset, bars
-            );
-            for i in 0..bars {
-                println!("  #{}: HOLD (shadow, no orders placed)", i + 1);
+            match std::env::var("DOCOC_LAYA_MODEL") {
+                Ok(model_dir) => {
+                    let csv = std::path::PathBuf::from("data/btcusdt_1h.csv");
+                    match dococ_shadow::run_shadow(
+                        std::path::Path::new(&model_dir),
+                        &csv,
+                        bars,
+                        &asset.to_uppercase(),
+                    ) {
+                        Ok(log) => {
+                            println!(
+                                "Shadow mode: {} over {} decision(s), orders placed: {}",
+                                asset, log.decisions, log.orders
+                            );
+                            let out = std::path::PathBuf::from(format!(
+                                "shadow_{}.json",
+                                asset.to_lowercase()
+                            ));
+                            std::fs::write(&out, log.to_json().unwrap()).unwrap();
+                            println!("Shadow journal written to {}", out.display());
+                        }
+                        Err(e) => println!("Shadow failed: {e}"),
+                    }
+                }
+                Err(_) => {
+                    println!("Shadow: set DOCOC_LAYA_MODEL to run the model-backed loop.");
+                    println!(
+                        "Shadow mode: {} over {} decision(s) (placeholder, never orders)",
+                        asset, bars
+                    );
+                    for i in 0..bars {
+                        println!("  #{}: HOLD (shadow, no orders placed)", i + 1);
+                    }
+                }
             }
-            println!("Shadow journal written (see dococ-shadow ShadowLog)");
         }
         Some(Commands::Asset { action }) => match action {
             AssetAction::Add { asset } => {
