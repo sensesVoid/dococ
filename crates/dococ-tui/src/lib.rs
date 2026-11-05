@@ -41,6 +41,16 @@ pub struct JournalRow {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct Metrics {
+    pub total_return_pct: f64,
+    pub max_drawdown_pct: f64,
+    pub sharpe: f64,
+    pub win_rate: f64,
+    pub trades: usize,
+    pub avg_confidence: f64,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct DashboardState {
     pub symbol: String,
     pub equity: f64,
@@ -55,6 +65,7 @@ pub struct DashboardState {
     pub news: String,
     pub health: String,
     pub recent: Vec<JournalRow>,
+    pub metrics: Metrics,
 }
 
 fn load_journal(symbol: &str) -> Vec<JournalRow> {
@@ -66,6 +77,82 @@ fn load_journal(symbol: &str) -> Vec<JournalRow> {
     serde_json::from_str::<Vec<JournalRow>>(&text).unwrap_or_default()
 }
 
+pub fn compute_metrics(rows: &[JournalRow]) -> Metrics {
+    if rows.is_empty() {
+        return Metrics::default();
+    }
+    let equities: Vec<f64> = rows.iter().map(|r| r.equity).collect();
+    let start = equities.first().copied().unwrap_or(0.0);
+    let end = equities.last().copied().unwrap_or(0.0);
+    let total_return_pct = if start.abs() > 1e-9 {
+        (end / start - 1.0) * 100.0
+    } else {
+        0.0
+    };
+    // Max drawdown from equity curve.
+    let mut peak = equities[0];
+    let mut max_dd = 0.0_f64;
+    for &e in &equities {
+        if e > peak {
+            peak = e;
+        }
+        if peak > 1e-9 {
+            max_dd = max_dd.max((peak - e) / peak);
+        }
+    }
+    // Returns per step for Sharpe (annualized assuming 1h bars, 24*365 steps/yr).
+    let mut rets = Vec::new();
+    for w in equities.windows(2) {
+        if w[0].abs() > 1e-9 {
+            rets.push(w[1] / w[0] - 1.0);
+        }
+    }
+    let sharpe = if rets.len() > 1 {
+        let mean = rets.iter().sum::<f64>() / rets.len() as f64;
+        let var = rets.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (rets.len() - 1) as f64;
+        let std = var.sqrt();
+        if std > 1e-12 {
+            mean / std * (24.0_f64 * 365.0).sqrt()
+        } else {
+            0.0
+        }
+    } else {
+        0.0
+    };
+    // Win rate / trades: count position changes as "trade events" with positive equity delta.
+    let mut trade_rets = Vec::new();
+    let mut prev_pos = 0.0_f64;
+    let mut prev_eq = start;
+    for r in rows {
+        let pos_changed = (r.position_qty - prev_pos).abs() > 1e-12;
+        let flattened = prev_pos.abs() > 1e-12 && r.position_qty.abs() < 1e-12;
+        if pos_changed || flattened {
+            let delta = r.equity - prev_eq;
+            if flattened || delta.abs() > 1e-9 {
+                trade_rets.push(delta);
+            }
+            prev_eq = r.equity;
+        }
+        prev_pos = r.position_qty;
+    }
+    let trades = trade_rets.len();
+    let wins = trade_rets.iter().filter(|d| **d > 0.0).count();
+    let win_rate = if trades > 0 {
+        wins as f64 / trades as f64 * 100.0
+    } else {
+        0.0
+    };
+    let avg_confidence = rows.iter().map(|r| r.confidence).sum::<f64>() / rows.len() as f64;
+    Metrics {
+        total_return_pct,
+        max_drawdown_pct: max_dd * 100.0,
+        sharpe,
+        win_rate,
+        trades,
+        avg_confidence,
+    }
+}
+
 fn state_from_journal(symbol: &str, rows: &[JournalRow]) -> DashboardState {
     let mut s = DashboardState {
         symbol: symbol.to_uppercase(),
@@ -73,6 +160,7 @@ fn state_from_journal(symbol: &str, rows: &[JournalRow]) -> DashboardState {
         news: "no feed (skeleton)".to_string(),
         health: "paper skeleton · journal source".to_string(),
         decisions: rows.len(),
+        metrics: compute_metrics(rows),
         ..Default::default()
     };
     if let Some(last) = rows.last() {
@@ -169,11 +257,18 @@ fn draw(f: &mut ratatui::Frame, state: &DashboardState) {
     .wrap(Wrap { trim: true });
     f.render_widget(acct, top[0]);
 
+    let m = &state.metrics;
     let intel = Paragraph::new(vec![
         Line::from(format!("Regime:  {}", state.regime)),
         Line::from(format!("News:    {}", state.news)),
-        Line::from(format!("Decisions: {}  Filled orders: {}", state.decisions, state.filled_orders)),
-        Line::from("Sharpe/win-rate: (needs history — skeleton)"),
+        Line::from(format!(
+            "Decisions: {}  Fills: {}  Trades: {}",
+            state.decisions, state.filled_orders, m.trades
+        )),
+        Line::from(format!(
+            "Return: {:+.2}%  MaxDD: {:.2}%  Sharpe: {:.2}  Win: {:.1}%",
+            m.total_return_pct, m.max_drawdown_pct, m.sharpe, m.win_rate
+        )),
         Line::from("System: daemon IPC not wired; reading paper_*.json"),
     ])
     .block(

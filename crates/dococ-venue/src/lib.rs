@@ -239,6 +239,25 @@ impl Venue for SimVenue {
     }
 }
 
+impl SimVenue {
+    /// Mark-to-market equity: cash balance plus open positions valued at
+    /// current marks (falls back to avg_price when no mark is set).
+    /// Note: the base `equity` field is debited/credited by full notional on
+    /// fills (spot-style cash accounting); this adds position mark value to
+    /// produce an MTM view.
+    pub fn equity_mtm(&self) -> f64 {
+        let mut total = self.equity;
+        for (sym, pos) in &self.positions {
+            if pos.quantity.abs() < 1e-12 {
+                continue;
+            }
+            let mark = self.prices.get(sym).copied().unwrap_or(pos.avg_price);
+            total += pos.quantity * mark;
+        }
+        total
+    }
+}
+
 /// Cost model for trading fees and slippage.
 #[derive(Debug, Clone, Copy)]
 pub struct CostModel {

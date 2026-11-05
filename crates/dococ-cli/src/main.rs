@@ -43,9 +43,15 @@ enum Commands {
         /// Asset to paper trade
         #[arg(default_value = "BTCUSDT")]
         asset: String,
-        /// Number of recent live bars to process
-        #[arg(default_value_t = 10)]
+        /// Number of recent live bars to fetch
+        #[arg(default_value_t = 50)]
         bars: usize,
+        /// Keep polling and appending (idempotent by timestamp)
+        #[arg(long)]
+        r#loop: bool,
+        /// Poll interval in seconds when --loop is set
+        #[arg(long, default_value_t = 300)]
+        interval: u64,
     },
     /// Run shadow mode: log decisions without placing orders
     Shadow {
@@ -138,23 +144,24 @@ fn main() {
             println!("Backtest: strategy={}, data={}", strategy, data);
             println!("  (not yet implemented)");
         }
-        Some(Commands::Paper { asset, bars: n_bars }) => {
+        Some(Commands::Paper {
+            asset,
+            bars: n_bars,
+            r#loop,
+            interval,
+        }) => {
             let model_dir = std::env::var("DOCOC_LAYA_MODEL")
                 .unwrap_or_else(|_| "models/btcusdt_ml".to_string());
             let symbol = asset.to_uppercase();
+            let out = std::path::PathBuf::from(format!("paper_{}.json", symbol.to_lowercase()));
             println!(
-                "Paper trading: {} (model: {}, bars: {})",
-                symbol, model_dir, n_bars
+                "Paper trading: {} (model: {}, bars: {}, loop: {}, interval: {}s)",
+                symbol, model_dir, n_bars, r#loop, interval
             );
             match dococ_laya::LayaRuntime::load(&model_dir) {
                 Ok(laya) => {
                     let strategy = dococ_engine::LayaStrategy::new(laya);
                     let venue = dococ_venue::SimVenue::new(100_000.0, 5.0);
-                    let bars = dococ_venue::live::fetch_latest(&symbol, n_bars).unwrap_or_default();
-                    if bars.is_empty() {
-                        println!("No live bars fetched; cannot start paper loop.");
-                        return;
-                    }
                     let account = dococ_core::Account::new(dococ_core::AccountId(1), 100_000.0);
                     let scheduler = dococ_engine::Scheduler::new(900, 1);
                     let mut engine = dococ_engine::Engine::new(
@@ -165,58 +172,86 @@ fn main() {
                         scheduler,
                     );
                     let sym = dococ_core::Symbol::new(&symbol);
-                    let mut journal: Vec<serde_json::Value> = Vec::new();
-                    let mut ticks = 0usize;
-                    for (ts, close) in &bars {
-                        let bar = dococ_core::Bar {
-                            timestamp: *ts,
-                            open: *close,
-                            high: *close,
-                            low: *close,
-                            close: *close,
-                            volume: 0.0,
-                        };
-                        if let Ok(Some(tick)) = engine.on_bar(&bar, &sym) {
-                            ticks += 1;
-                            let pos_qty = engine
-                                .account()
-                                .get_position(&sym)
-                                .map(|p| p.quantity)
-                                .unwrap_or(0.0);
-                            let risk = format!("{:?}", tick.risk_decision);
-                            println!(
-                                "  {} {:?} conf={:.3} target={:.4} pos={:.4} risk={}",
-                                ts, tick.action, tick.action_confidence, tick.target_qty, pos_qty, risk
-                            );
-                            journal.push(serde_json::json!({
-                                "timestamp": ts,
-                                "symbol": symbol,
-                                "price": close,
-                                "action": format!("{:?}", tick.action),
-                                "confidence": tick.action_confidence,
-                                "target_qty": tick.target_qty,
-                                "risk_decision": risk,
-                                "position_qty": pos_qty,
-                                "equity": engine.account().equity,
-                                "drawdown": engine.account().drawdown(),
-                                "oms_filled": engine.oms().filled_orders().len(),
-                            }));
-                        }
+                    // Load existing journal and resume idempotently by timestamp.
+                    let mut journal: Vec<serde_json::Value> = std::fs::read_to_string(&out)
+                        .ok()
+                        .and_then(|t| serde_json::from_str(&t).ok())
+                        .unwrap_or_default();
+                    let mut seen: std::collections::HashSet<i64> = journal
+                        .iter()
+                        .filter_map(|v| v.get("timestamp").and_then(|t| t.as_i64()))
+                        .collect();
+                    if !journal.is_empty() {
+                        println!(
+                            "Note: loaded {} journal row(s) for timestamp idempotency; sim state starts fresh (continuous state requires --loop in one process).",
+                            journal.len()
+                        );
                     }
-                    let acct = engine.account();
-                    let out = std::path::PathBuf::from(format!("paper_{}.json", symbol.to_lowercase()));
-                    let _ = std::fs::write(
-                        &out,
-                        serde_json::to_string_pretty(&journal).unwrap_or_else(|_| "[]".to_string()),
-                    );
-                    println!(
-                        "Paper complete: {} tick(s), equity {:.2}, DD {:.2}%, filled orders {}, journal {}",
-                        ticks,
-                        acct.equity,
-                        acct.drawdown() * 100.0,
-                        engine.oms().filled_orders().len(),
-                        out.display()
-                    );
+                    loop {
+                        let bars = dococ_venue::live::fetch_latest(&symbol, n_bars).unwrap_or_default();
+                        if bars.is_empty() {
+                            println!("No live bars fetched.");
+                        }
+                        let mut ticks = 0usize;
+                        for (ts, close) in &bars {
+                            if seen.contains(ts) {
+                                continue;
+                            }
+                            let bar = dococ_core::Bar {
+                                timestamp: *ts,
+                                open: *close,
+                                high: *close,
+                                low: *close,
+                                close: *close,
+                                volume: 0.0,
+                            };
+                            if let Ok(Some(tick)) = engine.on_bar(&bar, &sym) {
+                                ticks += 1;
+                                seen.insert(*ts);
+                                let pos_qty = engine
+                                    .account()
+                                    .get_position(&sym)
+                                    .map(|p| p.quantity)
+                                    .unwrap_or(0.0);
+                                let risk = format!("{:?}", tick.risk_decision);
+                                println!(
+                                    "  {} {:?} conf={:.3} target={:.4} pos={:.4} risk={}",
+                                    ts, tick.action, tick.action_confidence, tick.target_qty, pos_qty, risk
+                                );
+                                journal.push(serde_json::json!({
+                                    "timestamp": ts,
+                                    "symbol": symbol,
+                                    "price": close,
+                                    "action": format!("{:?}", tick.action),
+                                    "confidence": tick.action_confidence,
+                                    "target_qty": tick.target_qty,
+                                    "risk_decision": risk,
+                                    "position_qty": pos_qty,
+                                    "equity": engine.account().equity,
+                                    "drawdown": engine.account().drawdown(),
+                                    "oms_filled": engine.oms().filled_orders().len(),
+                                }));
+                            }
+                        }
+                        let acct = engine.account();
+                        let _ = std::fs::write(
+                            &out,
+                            serde_json::to_string_pretty(&journal).unwrap_or_else(|_| "[]".to_string()),
+                        );
+                        println!(
+                            "Paper batch: +{} tick(s), total {}, equity {:.2}, DD {:.2}%, fills {}, journal {}",
+                            ticks,
+                            journal.len(),
+                            acct.equity,
+                            acct.drawdown() * 100.0,
+                            engine.oms().filled_orders().len(),
+                            out.display()
+                        );
+                        if !r#loop {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_secs(interval));
+                    }
                 }
                 Err(e) => println!("Failed to load model: {e}"),
             }

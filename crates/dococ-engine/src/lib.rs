@@ -360,9 +360,9 @@ impl<S: Strategy> Engine<S> {
         self.sync_account_from_venue(symbol);
     }
 
-    /// Sync core account equity and the given symbol's position from the sim venue.
+    /// Sync core account equity (MTM) and the given symbol's position from the sim venue.
     fn sync_account_from_venue(&mut self, symbol: &Symbol) {
-        self.account.equity = self.venue.equity();
+        self.account.equity = self.venue.equity_mtm();
         self.account.update_peak();
         if let Some(vp) = self.venue.positions().get(&symbol.0) {
             let pos = self
