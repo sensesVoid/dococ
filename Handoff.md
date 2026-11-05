@@ -2,7 +2,7 @@
 
 Date: 2026-11-05
 Owner: @Geh
-Status: design closed; implementation not started
+Status: Phase 0 complete; Phase 1 starting
 Next session starts at: Pre-start checklist and Phase 0 spikes
 
 ## What this project is
