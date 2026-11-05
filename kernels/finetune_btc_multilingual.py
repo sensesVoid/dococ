@@ -58,23 +58,35 @@ if result.returncode != 0:
 print("Dry run PASSED")
 
 print("\n--- Training (4 epochs, freeze-encoder, multilingual base) ---")
-result = subprocess.run(
-    [
-        "laya-train",
-        "--data", DATA,
-        "--out", "/kaggle/working/ckpt",
-        "--base", base_dir,
-        "--epochs", "4",
-        "--micro-batch", "8",
-        "--grad-accum", "4",
-        "--freeze-encoder",
-        "--device", "cuda",
-        "--max-len", "1024",
-    ],
-    capture_output=True, text=True)
-print(result.stdout[-2000:] if result.stdout else "no stdout")
-if result.returncode != 0:
-    print(f"Training failed (rc={result.returncode}): {result.stderr[-2000:]}")
+try:
+    result = subprocess.run(
+        [
+            "laya-train",
+            "--data", DATA,
+            "--out", "/kaggle/working/ckpt",
+            "--base", base_dir,
+            "--epochs", "4",
+            "--micro-batch", "4",
+            "--grad-accum", "8",
+            "--freeze-encoder",
+            "--device", "cuda",
+            "--max-len", "1024",
+        ],
+        capture_output=True, text=True)
+    print(result.stdout[-2000:] if result.stdout else "no stdout")
+    print("STDERR:", result.stderr[-2000:] if result.stderr else "no stderr")
+    if result.returncode != 0:
+        os.makedirs("/kaggle/working/ckpt", exist_ok=True)
+        with open("/kaggle/working/ckpt/train_failed.txt", "w") as f:
+            f.write(f"rc={result.returncode}\nSTDOUT:\n{result.stdout[-4000:]}\nSTDERR:\n{result.stderr[-4000:]}")
+        print(f"Training failed (rc={result.returncode})")
+        sys.exit(1)
+except Exception as e:
+    import traceback
+    os.makedirs("/kaggle/working/ckpt", exist_ok=True)
+    with open("/kaggle/working/ckpt/train_failed.txt", "w") as f:
+        f.write(traceback.format_exc())
+    print("Training crashed:", e)
     sys.exit(1)
 
 os.makedirs("/kaggle/working/ckpt", exist_ok=True)
