@@ -9,6 +9,7 @@ members = [
     "crates/dococ-cli",
     "crates/dococ-laya",
     "crates/dococ-intel",
+    "crates/dococ-shadow",
     "crates/dococ-asset",
     "crates/dococ-drift",
     "crates/dococ-quant",

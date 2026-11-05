@@ -480,6 +480,16 @@ name = "dococ-risk"
 version = "0.1.0"
 
 [[package]]
+name = "dococ-shadow"
+version = "0.1.0"
+dependencies = [
+ "dococ-core",
+ "dococ-laya",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dococ-venue"
 version = "0.1.0"
 
