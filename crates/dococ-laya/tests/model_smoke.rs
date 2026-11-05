@@ -14,6 +14,7 @@ fn decides_with_exported_multilingual_model() {
 
     let runtime = LayaRuntime::load(model_dir).expect("load Laya model");
     let decision = runtime.decide(STATE).expect("run a Laya decision");
+    println!("{decision:?}");
 
     assert!(matches!(
         decision.action,
