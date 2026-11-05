@@ -114,6 +114,12 @@ impl RiskGuardian {
         RiskDecision::Accept
     }
 
+    /// Check combined exposure: total open notional + new trade notional <= cap.
+    pub fn check_combined_exposure(&self, state: &AccountState, trade: &ProposedTrade) -> bool {
+        let new_total = state.open_notional + trade.notional;
+        new_total <= state.equity * self.config.max_notional_cap
+    }
+
     pub fn position_size(&self, equity: f64, stop_distance: f64, price: f64) -> f64 {
         if equity <= 0.0 || stop_distance <= 0.0 || price <= 0.0 {
             return 0.0;
@@ -259,6 +265,46 @@ mod tests {
             notional: 640.0,
         };
         assert_eq!(guardian.evaluate(&state, &trade), RiskDecision::Accept);
+    }
+
+    #[test]
+    fn combined_exposure_within_cap() {
+        let config = RiskConfig::default();
+        let guardian = RiskGuardian::new(config);
+        let state = AccountState {
+            equity: 100_000.0,
+            daily_pnl: 0.0,
+            peak_equity: 100_000.0,
+            open_notional: 80_000.0,
+        };
+        let trade = ProposedTrade {
+            side: Side::Long,
+            quantity: 0.1,
+            price: 64_000.0,
+            stop_loss: None,
+            notional: 10_000.0,
+        };
+        assert!(guardian.check_combined_exposure(&state, &trade));
+    }
+
+    #[test]
+    fn combined_exposure_exceeds_cap() {
+        let config = RiskConfig::default();
+        let guardian = RiskGuardian::new(config);
+        let state = AccountState {
+            equity: 100_000.0,
+            daily_pnl: 0.0,
+            peak_equity: 100_000.0,
+            open_notional: 95_000.0,
+        };
+        let trade = ProposedTrade {
+            side: Side::Long,
+            quantity: 0.1,
+            price: 64_000.0,
+            stop_loss: None,
+            notional: 10_000.0,
+        };
+        assert!(!guardian.check_combined_exposure(&state, &trade));
     }
 
     #[test]
