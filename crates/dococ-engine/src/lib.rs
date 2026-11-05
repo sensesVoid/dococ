@@ -231,6 +231,8 @@ mod fault;
 pub use fault::*;
 mod replay;
 pub use replay::*;
+mod state;
+pub use state::*;
 
 #[cfg(test)]
 mod tests {
