@@ -8,6 +8,7 @@ members = [
     "crates/dococ-engine",
     "crates/dococ-cli",
     "crates/dococ-laya",
+    "crates/dococ-intel",
 ]
 
 [workspace.package]

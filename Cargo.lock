@@ -385,6 +385,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dococ-intel"
+version = "0.1.0"
+dependencies = [
+ "dococ-core",
+]
+
+[[package]]
 name = "dococ-laya"
 version = "0.1.0"
 dependencies = [
