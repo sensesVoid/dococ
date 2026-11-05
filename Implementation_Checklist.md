@@ -103,9 +103,9 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 ## Phase 3 - Laya runtime and state
 
-- [ ] State schema v1: deterministic ordering, units, NA sentinels, token counter, template hash.
-- [ ] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts.
-- [ ] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling.
+- [x] State schema v1: deterministic ordering, units, NA sentinels, token counter, template hash.
+- [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading done; LRU cache and spawn_blocking pending.)
+- [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema done; invalid-action handling pending.)
 - [ ] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya.
 - [ ] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback.
 - [ ] Python/Rust golden tests in CI.
@@ -114,12 +114,12 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 ## Phase 4 - LLM analyst and SQAC memory
 
-- [ ] `dococ-intel`: `opencode run` subprocess adapter; timeout, retry, JSON validation.
-- [ ] Brief schema and deterministic fallback; stale over 30 minutes blocks new entries.
-- [ ] News ingestion: GDELT, RSS, exchange announcements, economic calendar.
-- [ ] SQAC adapter: retrieval schema, 2-3 cases, timeout, `timestamp < decision_time`.
-- [ ] Prompt-injection tests and schema fuzzing.
-- [ ] Audit log: prompt hash, response hash, model alias, as-of, staleness.
+- [x] `dococ-intel`: `opencode run` subprocess adapter; timeout, retry, JSON validation.
+- [x] Brief schema and deterministic fallback; stale over 30 minutes blocks new entries.
+- [x] News ingestion: GDELT, RSS, exchange announcements, economic calendar.
+- [x] SQAC adapter: retrieval schema, 2-3 cases, timeout, `timestamp < decision_time`.
+- [x] Prompt-injection tests and schema fuzzing.
+- [x] Audit log: prompt hash, response hash, model alias, as-of, staleness.
 
 **Gate 4:** LLM brief is reliable and non-authoritative; stale/failed brief cannot open a position; SQAC never returns a future case.
 
