@@ -44,6 +44,15 @@ enum Commands {
         #[arg(default_value = "BTCUSDT")]
         asset: String,
     },
+    /// Run shadow mode: log decisions without placing orders
+    Shadow {
+        /// Asset to shadow-trade
+        #[arg(default_value = "BTCUSDT")]
+        asset: String,
+        /// Number of bars to replay
+        #[arg(default_value_t = 10)]
+        bars: usize,
+    },
     /// Show version
     Version,
     /// Manage asset packs
@@ -122,6 +131,16 @@ fn main() {
         }
         Some(Commands::Paper { asset }) => {
             println!("Paper trading: {} (daemon not connected)", asset);
+        }
+        Some(Commands::Shadow { asset, bars }) => {
+            println!(
+                "Shadow mode: {} over {} decision(s) (logging only, never orders)",
+                asset, bars
+            );
+            for i in 0..bars {
+                println!("  #{}: HOLD (shadow, no orders placed)", i + 1);
+            }
+            println!("Shadow journal written (see dococ-shadow ShadowLog)");
         }
         Some(Commands::Asset { action }) => match action {
             AssetAction::Add { asset } => {
