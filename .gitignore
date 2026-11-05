@@ -42,3 +42,6 @@ kernels_btc/
 AGENTS.md
 .codegraph/
 .freebuff/
+
+export_out*.txt
+parity_*.json
