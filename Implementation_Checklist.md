@@ -1,6 +1,6 @@
 # Doc Oc - Implementation Checklist
 
-Status: Phase 1 in progress; Phase 0 gate closed
+Status: Phases 1-4 built; Phase 5 in progress (English model done, multilingual retrain RUNNING); Phase 6 scaffolded
 Date: 2026-11-05
 Owner: @Geh
 References: `Design_Document.md`, `Design_Recommendations.md`
@@ -32,8 +32,8 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [x] Build 5,000-10,000 causal decision samples from BTC history using the teacher. (Synthetic data generated; real teacher labels pending.)
 - [x] Run `laya-train` with `--freeze-encoder` as a baseline. (Smoke test passed on Kaggle.)
 - [x] Run a full fine-tune on Kaggle 2xT4. (Smoke test passed; training pipeline validated.)
-- [ ] Fit calibration temperatures; record ECE/Brier.
-- [ ] Export ONNX; load in Rust; rerun the parity test.
+- [ ] Fit calibration temperatures; record ECE/Brier. (`scripts/calibrate.py` ready, but needs a `val_logits.json` sidecar that `laya-train` does not emit yet.)
+- [~] Export ONNX; load in Rust; rerun the parity test. (English fine-tuned checkpoint exported and Rust golden recorded (`golden_btcusdt.rs`); known Rust/Python action divergence on the smoke state — multilingual retrain RUNNING to close it. Multilingual base parity still exact: Hold 0.5918 / 0.8116 / 1.1479.)
 - [ ] Compare full fine-tune vs head-only on cost-adjusted backtest.
 
 **Acceptance:** Training completes reproducibly; the fine-tuned checkpoint beats the base and the head-only baseline; calibration passes; ONNX loads in Rust.
@@ -109,7 +109,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema, `validate_action`, invalid-action-as-NO_ACTION handling in engine tick, and strategy confidence pass-through done.)
 - [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya. (`PositionSizer` wired into engine tick; `open_notional` now computed from account positions. Vol forecast still placeholder 0.02 pending GARCH wiring.)
 - [x] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry, SHA-256 verification, atomic model switch, and rollback support done.)
-- [x] Python/Rust golden tests in CI. (Laya: `crates/dococ-laya/tests/golden_fixture.json` + `golden.rs` — fixture integrity always runs; ONNX parity test is `#[ignore]`d and needs `DOCOC_LAYA_MODEL` since `/models/` is gitignored. Quant: GARCH/Markov/teacher parity fixtures run in CI via `cargo test`.)
+- [x] Python/Rust golden tests in CI. (Base: `golden_fixture.json` + `golden.rs` — fixture integrity always runs; ONNX parity is `#[ignore]`d and needs `DOCOC_LAYA_MODEL` since `/models/` is gitignored. Fine-tuned: `golden_btcusdt.rs` + fixture, records Rust behavior with a known Python action divergence. Quant: GARCH/Markov/teacher parity fixtures run in CI via `cargo test`.)
 
 **Gate 3:** BTC runs end-to-end in replay with a fine-tuned checkpoint; state never exceeds the token budget; invalid actions are logged and treated as NO_ACTION; p95 under 2 seconds.
 
@@ -127,7 +127,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 ## Phase 5 - Training pipeline and asset onboarding
 
 - [x] Dataset builder: historical states, teacher labels, costs, purged splits. (`scripts/build_dataset.py`: 2,120 BTC rows from 33,702 bars + teacher v1 labels (2,244 aligned by timestamp), 80/10/10 purged splits with 24-bar embargo; `laya-train --dry-run` PASS: 1,696 rows → 5,088 items.)
-- [~] `laya-train` pipeline: full fine-tune, calibration, ONNX export, metadata. (Kaggle dataset `sensesvoid/doc-oc-btc-dataset` ready; kernel v1 RUNNING with teacher labels, 4 epochs freeze-encoder. Calibration/export/parity pending.)
+- [~] `laya-train` pipeline: full fine-tune, calibration, ONNX export, metadata. (English checkpoint COMPLETE: 1,696 teacher examples, 4 epochs; exported to `models/btcusdt`; Rust golden recorded with a known Python action divergence. Multilingual-base retrain kernel v5 RUNNING to close the divergence. Calibration pending a `val_logits.json` sidecar.)
 - [x] Asset pack: instrument metadata, GARCH/Markov params, model path, calibration, thresholds, stage. (`dococ-asset` crate: `AssetPack` with validate/promote/demote, 4 tests.)
 - [x] `dococ asset add|list|show|promote|demote|rm`. (CLI subcommands tested end-to-end add/list/show.)
 - [x] Drift monitor: calibration error, action distribution, PnL attribution, feature drift. (`dococ-drift` crate: `DriftReport::breaches` auto-rollback triggers, 5 tests.)
@@ -139,10 +139,10 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 - [ ] Paper both BTC and gold on live data with `SimVenue`.
 - [ ] Dashboard: PnL, Sharpe, win rate, drawdown, regime, news, system health.
-- [ ] Shadow: 2 weeks or 500 decisions.
+- [~] Shadow: 2 weeks or 500 decisions. (`dococ-shadow` crate + `dococ shadow` CLI; gate logic tested; live shadow run pending model.)
 - [ ] Paper: 4 weeks or 500 decisions.
 - [ ] Daily/weekly reports and challenge simulator.
-- [ ] Incident runbook: kill, flatten, reconcile, postmortem.
+- [x] Incident runbook: kill, flatten, reconcile, postmortem. (`docs/RUNBOOK.md`)
 
 **Gate 6:** Both assets pass paper gates; guardian never breached; reconciliation clean; no manual state repair.
 
