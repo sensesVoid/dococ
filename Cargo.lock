@@ -407,10 +407,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dococ-asset"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dococ-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "dococ-asset",
 ]
 
 [[package]]

@@ -46,6 +46,43 @@ enum Commands {
     },
     /// Show version
     Version,
+    /// Manage asset packs
+    Asset {
+        #[command(subcommand)]
+        action: AssetAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum AssetAction {
+    /// Add a new asset pack
+    Add { asset: String },
+    /// List asset packs
+    List,
+    /// Show an asset pack
+    Show { asset: String },
+    /// Promote an asset pack to the next stage
+    Promote { asset: String },
+    /// Demote an asset pack to the previous stage
+    Demote { asset: String },
+    /// Remove an asset pack
+    Rm { asset: String },
+}
+
+fn assets_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from("assets")
+}
+
+fn read_pack(asset: &str) -> Option<dococ_asset::AssetPack> {
+    let path = assets_dir().join(format!("{}.json", asset.to_uppercase()));
+    let text = std::fs::read_to_string(path).ok()?;
+    dococ_asset::AssetPack::from_json(&text).ok()
+}
+
+fn write_pack(pack: &dococ_asset::AssetPack) {
+    let _ = std::fs::create_dir_all(assets_dir());
+    let path = assets_dir().join(format!("{}.json", pack.asset.to_uppercase()));
+    std::fs::write(path, pack.to_json().unwrap()).unwrap();
 }
 
 fn main() {
@@ -86,6 +123,66 @@ fn main() {
         Some(Commands::Paper { asset }) => {
             println!("Paper trading: {} (daemon not connected)", asset);
         }
+        Some(Commands::Asset { action }) => match action {
+            AssetAction::Add { asset } => {
+                let pack = dococ_asset::AssetPack::new(&asset.to_uppercase());
+                write_pack(&pack);
+                println!("Asset pack added: {}", pack.to_json().unwrap());
+            }
+            AssetAction::List => {
+                if let Ok(entries) = std::fs::read_dir(assets_dir()) {
+                    for entry in entries.flatten() {
+                        if let Ok(text) = std::fs::read_to_string(entry.path()) {
+                            if let Ok(pack) = dococ_asset::AssetPack::from_json(&text) {
+                                println!("{} stage={:?}", pack.asset, pack.stage);
+                            }
+                        }
+                    }
+                } else {
+                    println!("No asset packs");
+                }
+            }
+            AssetAction::Show { asset } => {
+                match read_pack(&asset) {
+                    Some(pack) => println!("{}", pack.to_json().unwrap()),
+                    None => println!("Asset pack not found: {}", asset),
+                }
+            }
+            AssetAction::Promote { asset } => {
+                if let Some(mut pack) = read_pack(&asset) {
+                    match pack.promote() {
+                        Ok(stage) => {
+                            write_pack(&pack);
+                            println!("Promoted {} -> {:?}", pack.asset, stage);
+                        }
+                        Err(e) => println!("Promote failed: {}", e),
+                    }
+                } else {
+                    println!("Asset pack not found: {}", asset);
+                }
+            }
+            AssetAction::Demote { asset } => {
+                if let Some(mut pack) = read_pack(&asset) {
+                    match pack.demote() {
+                        Ok(stage) => {
+                            write_pack(&pack);
+                            println!("Demoted {} -> {:?}", pack.asset, stage);
+                        }
+                        Err(e) => println!("Demote failed: {}", e),
+                    }
+                } else {
+                    println!("Asset pack not found: {}", asset);
+                }
+            }
+            AssetAction::Rm { asset } => {
+                let path = assets_dir().join(format!("{}.json", asset.to_uppercase()));
+                if std::fs::remove_file(path).is_ok() {
+                    println!("Removed asset pack: {}", asset.to_uppercase());
+                } else {
+                    println!("Asset pack not found: {}", asset);
+                }
+            }
+        },
         Some(Commands::Version) | None => {
             println!("dococ 0.1.0 (Phase 1)");
         }
