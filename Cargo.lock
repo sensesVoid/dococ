@@ -450,6 +450,14 @@ name = "dococ-oms"
 version = "0.1.0"
 
 [[package]]
+name = "dococ-quant"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dococ-risk"
 version = "0.1.0"
 

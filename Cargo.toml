@@ -9,8 +9,8 @@ members = [
     "crates/dococ-cli",
     "crates/dococ-laya",
     "crates/dococ-intel",
+    "crates/dococ-quant",
 ]
-
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
