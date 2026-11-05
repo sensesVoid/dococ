@@ -65,10 +65,39 @@ pub fn run_shadow(
     }
     let start = bars.len().saturating_sub(limit);
     let mut log = ShadowLog::new();
+    let mut buf: Vec<(i64, f64)> = Vec::new();
     for (ts, close) in &bars[start..] {
-        let state = format!(
-            "Account: paper. Equity 100000 USD. Position: flat. Market: {symbol} perpetual. Last price {close:.0}."
-        );
+        // Keep a rolling window of the last 32 closes for momentum/vol features.
+        buf.push((*ts, *close));
+        if buf.len() > 32 {
+            buf.remove(0);
+        }
+        let state = if buf.len() > 24 {
+            let first = buf[0].1;
+            let mom = (close / first - 1.0) * 100.0;
+            let mut rets = Vec::new();
+            for w in buf.windows(2) {
+                rets.push((w[1].1 / w[0].1).ln());
+            }
+            let mean = rets.iter().sum::<f64>() / rets.len() as f64;
+            let var: f64 = rets.iter().map(|r| (r - mean).powi(2)).sum::<f64>()
+                / rets.len() as f64;
+            let vol = var.sqrt() * 24.0_f64.sqrt() * 100.0;
+            let bars_text = buf
+                .iter()
+                .rev()
+                .take(6)
+                .map(|b| format!("C:{:.0}", b.1))
+                .collect::<Vec<_>>()
+                .join(" | ");
+            format!(
+                "Account: paper. Equity 100000 USD. Position: flat. Market: {symbol} perpetual. Last price {close:.0}. 24h momentum: {mom:+.2}%. GARCH vol (24h): {vol:.2}%. Recent bars: {bars_text}. Regime: unknown. News: none."
+            )
+        } else {
+            format!(
+                "Account: paper. Equity 100000 USD. Position: flat. Market: {symbol} perpetual. Last price {close:.0}."
+            )
+        };
         let decision = runtime.decide(&state).map_err(|e| format!("decide: {e}"))?;
         log.record(ShadowRecord {
             timestamp: *ts,
