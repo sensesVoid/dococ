@@ -85,7 +85,6 @@ impl Venue for SimVenue {
         let fill_price = match order.order_type {
             OrderType::Market => self.fill_price(order.side, market_price),
             OrderType::Limit { price } => {
-                // Simple: fill only if market price is better than limit.
                 match order.side {
                     Side::Buy if market_price <= price => self.fill_price(order.side, market_price),
                     Side::Sell if market_price >= price => self.fill_price(order.side, market_price),
@@ -105,7 +104,6 @@ impl Venue for SimVenue {
             price: fill_price,
         };
 
-        // Update position.
         let position = self.positions.entry(order.symbol.clone()).or_insert(Position {
             symbol: order.symbol.clone(),
             quantity: 0.0,
@@ -129,7 +127,6 @@ impl Venue for SimVenue {
         }
         position.quantity += signed_qty;
 
-        // Update equity (simplified: subtract cost of buy, add proceeds of sell).
         let cost = fill_price * order.quantity;
         match order.side {
             Side::Buy => self.equity -= cost,
@@ -145,6 +142,46 @@ impl Venue for SimVenue {
 
     fn equity(&self) -> f64 {
         self.equity
+    }
+}
+
+/// Cost model for trading fees and slippage.
+#[derive(Debug, Clone, Copy)]
+pub struct CostModel {
+    pub fee_bps: f64,
+    pub slippage_bps: f64,
+}
+
+impl Default for CostModel {
+    fn default() -> Self {
+        Self {
+            fee_bps: 5.0,
+            slippage_bps: 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CostEstimate {
+    pub fee: f64,
+    pub slippage: f64,
+    pub total: f64,
+}
+
+impl CostModel {
+    pub fn estimate(&self, quantity: f64, price: f64, fee_bps: f64, slippage_bps: f64) -> CostEstimate {
+        let notional = quantity * price;
+        let fee = notional * fee_bps / 10_000.0;
+        let slippage = notional * slippage_bps / 10_000.0;
+        CostEstimate {
+            fee,
+            slippage,
+            total: fee + slippage,
+        }
+    }
+
+    pub fn estimate_default(&self, quantity: f64, price: f64) -> CostEstimate {
+        self.estimate(quantity, price, self.fee_bps, self.slippage_bps)
     }
 }
 
@@ -216,5 +253,29 @@ mod tests {
         venue.submit(sell).expect("sell");
         let pos = venue.positions().get("BTCUSDT").expect("position");
         assert!((pos.quantity - 0.05).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cost_model_computes_fee() {
+        let model = CostModel::default();
+        let cost = model.estimate(1.0, 64_000.0, 5.0, 1.0);
+        assert!((cost.total - 38.4).abs() < 1e-6);
+    }
+
+    #[test]
+    fn cost_model_includes_slippage() {
+        let model = CostModel::default();
+        let cost = model.estimate(1.0, 64_000.0, 5.0, 2.0);
+        assert!((cost.total - 44.8).abs() < 1e-6);
+        assert!((cost.fee - 32.0).abs() < 1e-6);
+        assert!((cost.slippage - 12.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn cost_model_scales_with_size() {
+        let model = CostModel::default();
+        let cost1 = model.estimate(1.0, 64_000.0, 5.0, 1.0);
+        let cost2 = model.estimate(2.0, 64_000.0, 5.0, 1.0);
+        assert!((cost2.total - cost1.total * 2.0).abs() < 1e-6);
     }
 }
