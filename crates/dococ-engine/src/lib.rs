@@ -1,7 +1,7 @@
 use dococ_core::{Account, Bar, Clock, Event, FixedClock, Instrument, Order, Side, Symbol};
-use dococ_laya::{LayaRuntime, OrderAction};
+use dococ_laya::{LayaRuntime, OrderAction, validate_action, ActionValidation};
 use dococ_oms::OrderManager;
-use dococ_risk::{AccountState, RiskConfig, RiskGuardian};
+use dococ_risk::{AccountState, RiskConfig, RiskGuardian, PositionSizer, SizingConfig};
 use dococ_venue::SimVenue;
 
 /// Strategy interface: pluggable decision logic.
@@ -102,12 +102,14 @@ pub struct TickResult {
 pub struct Engine<S: Strategy> {
     strategy: S,
     guardian: RiskGuardian,
+    sizer: PositionSizer,
     oms: OrderManager,
     venue: SimVenue,
     account: Account,
     scheduler: Scheduler,
     llm_brief: Option<String>,
     llm_brief_stale: bool,
+    timeout: InferenceTimeout,
 }
 
 impl<S: Strategy> Engine<S> {
@@ -121,12 +123,14 @@ impl<S: Strategy> Engine<S> {
         Self {
             strategy,
             guardian: RiskGuardian::new(risk_config),
+            sizer: PositionSizer::new(SizingConfig::default()),
             oms: OrderManager::new(),
             venue,
             account,
             scheduler,
             llm_brief: None,
             llm_brief_stale: true,
+            timeout: InferenceTimeout::default(),
         }
     }
 
@@ -181,9 +185,15 @@ impl<S: Strategy> Engine<S> {
             dococ_risk::RiskDecision::Accept
         };
 
-        // Target position.
-        let max_qty = self.account.equity * 0.01 / bar.close; // 1% of equity
-        let target = TargetPosition::from_action(action, confidence, max_qty);
+        // Sizing: volatility target + confidence + guardian headroom.
+        let vol = 0.02; // placeholder; in production, use GARCH forecast
+        let headroom = self.account.equity * 1.0; // 1x notional cap
+        let sized_qty = self.sizer.size(self.account.equity, vol, confidence, bar.close, headroom);
+        let target_qty = match action {
+            OrderAction::Long => sized_qty,
+            OrderAction::Short => -sized_qty,
+            _ => 0.0,
+        };
 
         // Update LLM brief staleness.
         if let Some(brief_time) = self.llm_brief.as_ref().map(|_| now) {
@@ -196,7 +206,7 @@ impl<S: Strategy> Engine<S> {
             action,
             action_confidence: confidence,
             risk_decision,
-            target_qty: target.target_qty,
+            target_qty,
         }))
     }
 
@@ -233,6 +243,8 @@ mod replay;
 pub use replay::*;
 mod state;
 pub use state::*;
+mod timeout;
+pub use timeout::*;
 
 #[cfg(test)]
 mod tests {
