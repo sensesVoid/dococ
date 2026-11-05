@@ -161,6 +161,8 @@ fn extract_number_field(json: &str, field: &str) -> Option<f64> {
 
 mod news;
 pub use news::*;
+mod sqac;
+pub use sqac::*;
 
 #[cfg(test)]
 mod tests {
