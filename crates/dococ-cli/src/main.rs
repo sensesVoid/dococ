@@ -1,5 +1,18 @@
 use clap::{Parser, Subcommand};
 
+struct DummyPaperStrategy;
+impl dococ_engine::Strategy for DummyPaperStrategy {
+    fn name(&self) -> &str {
+        "dummy-paper"
+    }
+    fn decide(
+        &mut self,
+        _state: &str,
+    ) -> Result<(dococ_laya::OrderAction, f64), Box<dyn std::error::Error>> {
+        Ok((dococ_laya::OrderAction::Hold, 0.5))
+    }
+}
+
 #[derive(Parser)]
 #[command(
     name = "dococ",
@@ -170,9 +183,19 @@ fn main() {
                 "Paper trading: {} (model: {}, bars: {}, loop: {}, interval: {}s, fresh: {})",
                 symbol, model_dir, n_bars, r#loop, interval, fresh
             );
-            match dococ_laya::LayaRuntime::load(&model_dir) {
-                Ok(laya) => {
-                    let strategy = dococ_engine::LayaStrategy::new(laya);
+            let dry = std::env::var("DOCOC_PAPER_DRY").ok().as_deref() == Some("1");
+            let strategy_result: Result<Box<dyn dococ_engine::Strategy>, String> = if dry {
+                println!("Paper DRY mode: using dummy strategy (no model load)");
+                Ok(Box::new(DummyPaperStrategy))
+            } else {
+                dococ_laya::LayaRuntime::load(&model_dir)
+                    .map(|laya| {
+                        Box::new(dococ_engine::LayaStrategy::new(laya)) as Box<dyn dococ_engine::Strategy>
+                    })
+                    .map_err(|e| e.to_string())
+            };
+            match strategy_result {
+                Ok(strategy) => {
                     let slippage_bps = 5.0;
                     // Try to restore sim state for cross-process continuity.
                     let restored = if !fresh {

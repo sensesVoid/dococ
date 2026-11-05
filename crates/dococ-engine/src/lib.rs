@@ -33,6 +33,16 @@ impl Strategy for LayaStrategy {
     }
 }
 
+impl Strategy for Box<dyn Strategy> {
+    fn name(&self) -> &str {
+        (**self).name()
+    }
+
+    fn decide(&mut self, state: &str) -> Result<(OrderAction, f64), Box<dyn std::error::Error>> {
+        (**self).decide(state)
+    }
+}
+
 /// Target position calculator: converts action + confidence + risk headroom into target quantity.
 pub struct TargetPosition {
     pub symbol: Symbol,

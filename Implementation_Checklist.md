@@ -137,7 +137,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 ## Phase 6 - Paper trading
 
-- [~] Paper both BTC and gold on live data with `SimVenue`. (`dococ paper BTCUSDT [bars] [--loop --interval]` runs engine+Laya over live Binance 1h bars via `SimVenue`; executes market orders through SimVenue/OMS, persists `paper_<symbol>.json` (idempotent by timestamp within a run/loop). Sim equity now MTM. Continuous cross-process state restore not yet implemented. Gold live data/paper pending broker/CME source choice.)
+- [~] Paper both BTC and gold on live data with `SimVenue`. (`dococ paper BTCUSDT [bars] [--loop --interval] [--fresh]` runs engine+Laya over live Binance 1h bars via `SimVenue`; executes market orders through SimVenue/OMS, persists `paper_<symbol>.json` + `paper_<symbol>.state.json` (idempotent by timestamp; cross-process sim state restore/save implemented, OMS state not fully restored). Sim equity MTM. `dococ report <asset>` summarizes journal metrics. Gold live data/paper pending IBKR approval/broker data source.)
 - [~] Dashboard: PnL, Sharpe, win rate, drawdown, regime, news, system health. (`dococ-tui` ratatui skeleton + `dococ dash`: PnL/equity/DD/pos, Sharpe/win-rate/return from journal metrics, recent decisions; regime/news/daemon health are placeholders pending intel/IPC wiring.)
 - [x] Shadow: 2 weeks or 500 decisions (decision-count gate). (`dococ-shadow` model-backed replay with enriched state; 500-decision run: 500 decisions, 0 orders, 111 Long/389 Short, mean conf 0.395. 2-week time gate still pending.)
 - [ ] Paper: 4 weeks or 500 decisions.
