@@ -32,7 +32,10 @@ base_dir = snapshot_download(
 if os.path.isdir(os.path.join(base_dir, "multilingual", "model.safetensors")) or os.path.isdir(os.path.join(base_dir, "multilingual")):
     pass  # download includes subfolder content at repo root or nested; resolve below
 nested = os.path.join(base_dir, "multilingual")
-if os.path.isdir(nested) and os.path.exists(os.path.join(nested, "config.json")):
+if os.path.isdir(nested) and (
+    os.path.exists(os.path.join(nested, "model.safetensors"))
+    or os.path.exists(os.path.join(nested, "rl_agent_config.json"))
+):
     base_dir = nested
 print(f"Base checkpoint at {base_dir}")
 
