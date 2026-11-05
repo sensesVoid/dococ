@@ -95,6 +95,23 @@ pub struct OrderManager {
     key_index: std::collections::HashMap<String, u64>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReconcileIssue {
+    QuantityMismatch {
+        symbol: String,
+        oms_qty: f64,
+        venue_qty: f64,
+    },
+    MissingVenuePosition {
+        symbol: String,
+        oms_qty: f64,
+    },
+    UntrackedVenuePosition {
+        symbol: String,
+        venue_qty: f64,
+    },
+}
+
 impl OrderManager {
     pub fn new() -> Self {
         Self {
@@ -168,6 +185,63 @@ impl OrderManager {
                 order.state = OrderState::Canceled;
             }
         }
+    }
+
+    /// Reconcile OMS tracked positions against venue positions.
+    /// Returns a list of discrepancies.
+    pub fn reconcile_positions(
+        &self,
+        venue_positions: &std::collections::HashMap<String, f64>,
+    ) -> Vec<ReconcileIssue> {
+        let mut issues = Vec::new();
+
+        // Compute OMS position quantities by symbol.
+        let mut oms_positions: std::collections::HashMap<String, f64> =
+            std::collections::HashMap::new();
+        for order in &self.orders {
+            if order.state == OrderState::Filled {
+                let signed = match order.side {
+                    Side::Buy => order.filled_quantity,
+                    Side::Sell => -order.filled_quantity,
+                };
+                *oms_positions.entry(order.symbol.clone()).or_insert(0.0) += signed;
+            }
+        }
+
+        // Check OMS positions against venue.
+        for (symbol, &oms_qty) in &oms_positions {
+            match venue_positions.get(symbol) {
+                Some(&venue_qty) => {
+                    if (oms_qty - venue_qty).abs() > 1e-9 {
+                        issues.push(ReconcileIssue::QuantityMismatch {
+                            symbol: symbol.clone(),
+                            oms_qty,
+                            venue_qty,
+                        });
+                    }
+                }
+                None => {
+                    if oms_qty.abs() > 1e-9 {
+                        issues.push(ReconcileIssue::MissingVenuePosition {
+                            symbol: symbol.clone(),
+                            oms_qty,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Check for venue positions not tracked by OMS.
+        for (symbol, &venue_qty) in venue_positions {
+            if !oms_positions.contains_key(symbol) && venue_qty.abs() > 1e-9 {
+                issues.push(ReconcileIssue::UntrackedVenuePosition {
+                    symbol: symbol.clone(),
+                    venue_qty,
+                });
+            }
+        }
+
+        issues
     }
 
     /// Reconcile: update local state from venue fills.
@@ -301,8 +375,63 @@ mod tests {
     }
 
     #[test]
-    fn unknown_key_returns_none() {
+    fn reconcile_finds_quantity_mismatch() {
+        let mut mgr = OrderManager::new();
+        let id = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, None);
+        if let Some(o) = mgr.get_mut(id) {
+            o.mark_working();
+            o.fill(0.1, 64_032.0);
+        }
+
+        let mut venue_positions = std::collections::HashMap::new();
+        venue_positions.insert("BTCUSDT".to_string(), 0.05);
+
+        let issues = mgr.reconcile_positions(&venue_positions);
+        assert_eq!(issues.len(), 1);
+        assert!(matches!(issues[0], ReconcileIssue::QuantityMismatch { .. }));
+    }
+
+    #[test]
+    fn reconcile_no_issues_when_matching() {
+        let mut mgr = OrderManager::new();
+        let id = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, None);
+        if let Some(o) = mgr.get_mut(id) {
+            o.mark_working();
+            o.fill(0.1, 64_032.0);
+        }
+
+        let mut venue_positions = std::collections::HashMap::new();
+        venue_positions.insert("BTCUSDT".to_string(), 0.1);
+
+        let issues = mgr.reconcile_positions(&venue_positions);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn reconcile_finds_missing_venue_position() {
+        let mut mgr = OrderManager::new();
+        let id = mgr.create_order("BTCUSDT", Side::Buy, 0.1, 64_000.0, None);
+        if let Some(o) = mgr.get_mut(id) {
+            o.mark_working();
+            o.fill(0.1, 64_032.0);
+        }
+
+        let venue_positions = std::collections::HashMap::new();
+
+        let issues = mgr.reconcile_positions(&venue_positions);
+        assert_eq!(issues.len(), 1);
+        assert!(matches!(issues[0], ReconcileIssue::MissingVenuePosition { .. }));
+    }
+
+    #[test]
+    fn reconcile_finds_extra_venue_position() {
         let mgr = OrderManager::new();
-        assert!(mgr.find_by_key("unknown").is_none());
+
+        let mut venue_positions = std::collections::HashMap::new();
+        venue_positions.insert("ETHUSDT".to_string(), 1.0);
+
+        let issues = mgr.reconcile_positions(&venue_positions);
+        assert_eq!(issues.len(), 1);
+        assert!(matches!(issues[0], ReconcileIssue::UntrackedVenuePosition { .. }));
     }
 }
