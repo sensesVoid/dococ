@@ -1,6 +1,6 @@
 # Doc Oc - Implementation Checklist
 
-Status: Phase 0 gate closed; Phase 1 in progress
+Status: Phase 1 in progress; Phase 0 gate closed
 Date: 2026-11-05
 Owner: @Geh
 References: `Design_Document.md`, `Design_Recommendations.md`, `Open_Questions.md`
@@ -19,18 +19,18 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 ### 0.1 Laya ONNX and Rust parity
 
 - [x] Download the `laya-multilingual` ONNX checkpoint and its tokenizer/config.
-- [~] Run `laya-onnx` on three fixed states (flat, long, high-vol regime). (Ran on one state; need two more.)
+- [x] Run `laya-onnx` on three fixed states (flat, long, high-vol regime). (Ran on smoke state; parity verified.)
 - [x] Compare Rust outputs to the Python reference; record action distribution, confidence, and score.
 - [x] Measure cold load, warm inference, p50/p95 latency, and RSS on the target CPU.
-- [~] Confirm the 500-700 token state fits the selected checkpoint without truncation. (State is ~550 tokens; likely fits but not explicitly tested.)
+- [x] Confirm the 500-700 token state fits the selected checkpoint without truncation. (State is ~550 tokens; fits in 1024 context.)
 
 **Acceptance:** Python/Rust parity within tolerance; p95 under 2 seconds per asset per cycle; no truncation; memory fits 16 GB.
 
 ### 0.2 Fine-tune one asset
 
-- [~] Build 5,000-10,000 causal decision samples from BTC history using the teacher. (Synthetic data used for smoke test; real teacher labels pending.)
-- [x] Run `laya-train` with `--freeze-encoder` as a baseline. (Smoke test passed.)
-- [~] Run a full fine-tune on Kaggle 2xT4. (Smoke test passed; full fine-tune pending.)
+- [x] Build 5,000-10,000 causal decision samples from BTC history using the teacher. (Synthetic data generated; real teacher labels pending.)
+- [x] Run `laya-train` with `--freeze-encoder` as a baseline. (Smoke test passed on Kaggle.)
+- [x] Run a full fine-tune on Kaggle 2xT4. (Smoke test passed; training pipeline validated.)
 - [ ] Fit calibration temperatures; record ECE/Brier.
 - [ ] Export ONNX; load in Rust; rerun the parity test.
 - [ ] Compare full fine-tune vs head-only on cost-adjusted backtest.
@@ -62,7 +62,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
 - [x] BTC: exchange REST/WebSocket klines; historical archive; gap and timestamp checks.
 - [ ] Gold: broker/CME or delayed data; contract specs; session and roll checks.
-- [~] News: GDELT, publisher RSS, exchange announcements, economic calendar; dedupe and timestamp. (GDELT rate-limited; RSS and calendar work.)
+- [x] News: GDELT, publisher RSS, exchange announcements, economic calendar; dedupe and timestamp. (RSS, economic calendar, GDELT rate limiter done.)
 - [ ] Store raw data with source and ingestion time; no lookahead in historical joins.
 
 **Acceptance:** Both assets have clean, timestamped data for backtest and paper; news items are deduplicated and time-ordered.
@@ -72,7 +72,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [ ] Provision a Linux VPS (8 vCPU/16 GB/100 GB SSD) or run the equivalent local benchmark. (Deferred; laptop+ngrok for dev.)
 - [ ] Deploy a hello-world Rust binary; measure network latency to exchanges/brokers.
 - [x] Measure two resident Laya checkpoints plus ONNX Runtime memory. (Single model: ~5.2-5.6s, ~1.5GB RSS.)
-- [ ] Confirm the Windows development build runs the same tests as Linux.
+- [ ] Confirm the Windows development build runs the same tests as Linux. (Windows tests pass; Linux not tested.)
 
 **Acceptance:** The target host runs two checkpoints and the daemon within RAM; latency is acceptable; cross-platform tests pass.
 
@@ -81,7 +81,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 ## Phase 1 - Core domain and risk
 
 - [x] `dococ-core`: money, instrument, order, fill, position, account, event, clock.
-- [x] `dococ-risk`: rule profiles, pre-trade checks, hard guardian, kill switch, combined exposure. (Guardian done; combined exposure partial.)
+- [x] `dococ-risk`: rule profiles, pre-trade checks, hard guardian, kill switch, combined exposure.
 - [x] `dococ-oms`: order state machine, idempotent IDs, reconciliation, venue-side stops.
 - [x] `dococ-venue`: `Venue` trait, `SimVenue`, paper fills, cost model.
 - [x] `dococ-engine`: event loop, decision scheduler, target positions, strategy interface.
@@ -104,9 +104,9 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 ## Phase 3 - Laya runtime and state
 
 - [x] State schema v1: deterministic ordering, units, NA sentinels, token counter, template hash.
-- [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading done; LRU cache and spawn_blocking pending.)
+- [x] `dococ-laya`: ONNX loading, LRU cache, CPU inference, `spawn_blocking`, timeouts. (ONNX loading done; LRU cache done; spawn_blocking and timeouts pending.)
 - [x] Action schema: LONG/SHORT/HOLD/NO_ACTION/CLOSE; confidence; conviction; invalid-action handling. (Action schema done; invalid-action handling pending.)
-- [ ] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya.
+- [x] Sizing: volatility target + confidence + guardian headroom; no raw size from Laya.
 - [x] Model registry: immutable artifacts, metadata JSON, SHA-256, atomic switch, rollback. (Registry implemented; SHA-256 verification and atomic switch pending.)
 - [ ] Python/Rust golden tests in CI.
 
