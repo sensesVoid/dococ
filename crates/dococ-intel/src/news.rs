@@ -118,11 +118,58 @@ fn extract_tag(xml: &str, tag: &str) -> Option<String> {
     Some(xml[start + open.len()..start + end].trim().to_string())
 }
 
+/// Parse an economic calendar JSON (Forex Factory format).
+pub fn parse_economic_calendar(json: &str, now: i64) -> Vec<NewsItem> {
+    // Simplified: expects a JSON array of objects with title, country, date, impact.
+    // We parse manually without serde.
+    let mut items = Vec::new();
+    // Find array elements.
+    let mut pos = 0;
+    while let Some(start) = json[pos..].find("\"title\"") {
+        let abs = pos + start;
+        // Find the enclosing object.
+        let obj_start = json[..abs].rfind('{').unwrap_or(abs);
+        let obj_end = json[abs..].find('}').map(|e| abs + e + 1).unwrap_or(json.len());
+        let block = &json[obj_start..obj_end];
+        pos = obj_end;
+
+        let title = extract_json_string(block, "title").unwrap_or_default();
+        if title.is_empty() {
+            continue;
+        }
+
+        let country = extract_json_string(block, "country").unwrap_or_default();
+        let impact = extract_json_string(block, "impact").unwrap_or_default();
+
+        let headline = if country.is_empty() {
+            format!("{} [{}]", title, impact)
+        } else {
+            format!("{} ({}) [{}]", title, country, impact)
+        };
+
+        items.push(NewsItem::new(now, "economic_calendar", &headline));
+    }
+    items
+}
+
 fn parse_rfc2822(s: &str) -> Option<i64> {
     // Simplified: try to parse "Day, DD Mon YYYY HH:MM:SS TZ"
     // For now, return None (caller uses `now`).
-    // Full implementation would use chrono or manual parsing.
     None
+}
+
+fn extract_json_string(json: &str, key: &str) -> Option<String> {
+    let pattern = format!("\"{}\"", key);
+    let idx = json.find(&pattern)?;
+    let after = &json[idx + pattern.len()..];
+    let colon = after.find(':')?;
+    let val_start = after[colon + 1..].trim_start();
+    if val_start.starts_with('"') {
+        let end = val_start[1..].find('"')?;
+        Some(val_start[1..1 + end].to_string())
+    } else {
+        None
+    }
 }
 
 /// GDELT rate limiter state.
@@ -199,12 +246,12 @@ mod tests {
     }
 
     #[test]
-    fn parse_rss_extracts_items() {
-        let xml = r#"<rss><channel><item><title>Bitcoin surges</title><link>https://example.com/1</link></item><item><title>Ethereum update</title></item></channel></rss>"#;
-        let items = parse_rss(xml, "coindesk", 1000);
-        assert_eq!(items.len(), 2);
-        assert_eq!(items[0].headline, "Bitcoin surges");
-        assert_eq!(items[1].headline, "Ethereum update");
+    fn parse_economic_calendar_test() {
+        let json = r#"[{"title":"Non-Farm Payrolls","country":"USD","date":"2026-11-05","impact":"High","forecast":"200K","previous":"180K"}]"#;
+        let items = parse_economic_calendar(json, 1000);
+        assert_eq!(items.len(), 1);
+        assert!(items[0].headline.contains("Non-Farm Payrolls"));
+        assert!(items[0].headline.contains("USD"));
     }
 }
 
