@@ -48,7 +48,7 @@ Doc Oc is a Rust daemon plus a terminal client for autonomous, paper-first tradi
 | LLM | OpenCode CLI subprocess; strict JSON; timeout; stale over 30 minutes blocks new entries. |
 | Risk | 0.25% risk/trade, 2% daily loss, 5% max drawdown, 1x notional cap; 2 weeks shadow + 4 weeks paper or 500 decisions. |
 | SQAC | Original notes only; no proprietary course text; strict time filtering. |
-| Deployment | Windows development; Linux VPS 8 vCPU/16 GB for paper/live. |
+| Deployment | Windows development; Linux VPS 8 vCPU/16 GB for paper/live. Laptop + ngrok for development/paper trading. |
 
 ## What is done
 
