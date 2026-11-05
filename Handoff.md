@@ -31,7 +31,7 @@ Doc Oc is a Rust daemon plus a terminal client for autonomous, paper-first tradi
 |---|---|
 | `Design_Document.md` | Original design; the new Decision Record supersedes the Laya/LLM/onboarding sections. |
 | `Design_Recommendations.md` | Full recommendation set and rationale. |
-| `Open_Questions.md` | Closed question register, locked decisions, deferred items, token-handling decision. |
+| Open questions (closed) | Register closed and removed 2026-11-05; locked decisions in `Design_Document.md` (Decision Record) and `Design_Recommendations.md`; deferred items in `Implementation_Checklist.md`. |
 | `Implementation_Checklist.md` | Phased build plan with acceptance criteria and gates. |
 | `Handoff.md` | This file. |
 | `AGENTS.md` | Manual memory snapshot for all coding agents. Regenerate with `context-janitor.ps1` when it is installed. |
@@ -109,7 +109,7 @@ None. The user accepted the token exposure and chose to leave the existing token
 
 ## How to resume
 
-1. Read `AGENTS.md` (if present), `Open_Questions.md`, and `Implementation_Checklist.md`.
+1. Read `Implementation_Checklist.md` (and `Handoff.md` for resume state).
 2. Check `.agent_context/memory/` for durable facts and decisions.
 3. Check the SQAC checkpoint for the last session state.
 4. Confirm the token-handling decision: leave as-is; use only via MCP/CLI.
@@ -143,7 +143,7 @@ None. The user accepted the token exposure and chose to leave the existing token
 ## Design-document status
 
 - A Decision Record is at the top of `Design_Document.md` and supersedes the old "Laya, LLMs and SQAC" and "Asset onboarding" sections.
-- The Laya section and key onboarding text were updated; the open-questions section now points to `Open_Questions.md`.
+- The Laya section and key onboarding text were updated; the open-questions section is closed (register removed 2026-11-05).
 - A full rewrite of the remaining outdated details is a Phase 0 documentation task.
 
 ## Contact

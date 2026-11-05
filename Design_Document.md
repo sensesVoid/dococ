@@ -29,7 +29,7 @@ Doc Oc is a Rust daemon plus a terminal client that trades BTC/USDT, other crypt
 
 ## Decision Record - 2026-11-05
 
-This record supersedes the Laya/LLM authority model and the asset-onboarding tiers below. The full register is in `Open_Questions.md`; the build plan is in `Implementation_Checklist.md`.
+This record supersedes the Laya/LLM authority model and the asset-onboarding tiers below. The open-question register was closed 2026-11-05 (locked decisions in the Decision Record above, deferred items in `Implementation_Checklist.md`); the build plan is in `Implementation_Checklist.md`.
 
 | Area | Decision |
 | --- | --- |
@@ -358,7 +358,7 @@ Each gate is pass or fail: a failed gate means fixing or dropping the work, not 
 
 ## Open questions and unverified assumptions (closed)
 
-Closed. See `Open_Questions.md` for the full register and `Implementation_Checklist.md` for the deferred Phase 0 tasks.
+Closed. See `Implementation_Checklist.md` for the closed register and deferred Phase 0 tasks.
 
 Resolved since the original draft:
 

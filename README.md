@@ -45,6 +45,5 @@ Record load time, warm latency, and peak RSS for context lengths 512, 1024, and 
 
 - `Design_Document.md`
 - `Design_Recommendations.md`
-- `Open_Questions.md`
 - `Implementation_Checklist.md`
 - `Handoff.md`

@@ -3,7 +3,8 @@
 Status: Phase 1 in progress; Phase 0 gate closed
 Date: 2026-11-05
 Owner: @Geh
-References: `Design_Document.md`, `Design_Recommendations.md`, `Open_Questions.md`
+References: `Design_Document.md`, `Design_Recommendations.md`
+Note: the open-question register was closed and removed 2026-11-05; locked decisions live in `Design_Document.md` (Decision Record) and `Design_Recommendations.md`.
 
 Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 
@@ -12,7 +13,7 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [x] **Token decision.** Leave the existing HuggingFace and Kaggle tokens as-is per user; they are unused but valid. Use them only through the configured MCP/CLI. Never print or copy them.
 - [x] **Confirm no new secrets in the repo.** Scan `.env`, scripts, and memory files. `opencode.json` is an accepted exception by user decision. Never paste tokens into chat, prompts, or `.agent_context/`.
 - [x] **Initialize the Rust workspace.** `cargo new` workspace, six crates, `rustfmt`, `clippy`, CI, `.gitignore`, `README.md`, `AGENTS.md` from memory-keeper.
-- [x] **Record the design baseline.** Commit `Design_Document.md`, `Design_Recommendations.md`, `Open_Questions.md`, this checklist, and the handoff.
+- [x] **Record the design baseline.** Commit `Design_Document.md`, `Design_Recommendations.md`, this checklist, and the handoff.
 
 ## Phase 0 - Spikes and go/no-go
 
