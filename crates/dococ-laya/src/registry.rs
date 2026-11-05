@@ -71,6 +71,12 @@ impl ModelRegistry {
         self.models.contains_key(name)
     }
 
+    /// Verify the SHA-256 hash of a model file.
+    pub fn verify_sha256(&self, name: &str, file_bytes: &[u8]) -> Result<bool, &'static str> {
+        let meta = self.get(name).ok_or("model not registered")?;
+        Ok(sha256_hex(file_bytes) == meta.sha256)
+    }
+
     /// Number of registered models.
     pub fn len(&self) -> usize {
         self.models.len()
@@ -79,6 +85,16 @@ impl ModelRegistry {
     pub fn is_empty(&self) -> bool {
         self.models.is_empty()
     }
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(data);
+    let mut hex = String::with_capacity(64);
+    for b in &hash {
+        hex.push_str(&format!("{:02x}", b));
+    }
+    hex
 }
 
 impl Default for ModelRegistry {
@@ -173,5 +189,21 @@ mod tests {
     fn validate_action_invalid() {
         assert!(matches!(validate_action("BUY"), ActionValidation::Invalid(_)));
         assert!(matches!(validate_action(""), ActionValidation::Invalid(_)));
+    }
+
+    #[test]
+    fn verify_sha256_correct() {
+        let mut reg = ModelRegistry::new();
+        let mut meta = make_meta("btc-v1");
+        meta.sha256 = sha256_hex(b"hello");
+        reg.register(meta);
+        assert!(reg.verify_sha256("btc-v1", b"hello").unwrap());
+        assert!(!reg.verify_sha256("btc-v1", b"world").unwrap());
+    }
+
+    #[test]
+    fn verify_sha256_unknown_model() {
+        let reg = ModelRegistry::new();
+        assert!(reg.verify_sha256("unknown", b"hello").is_err());
     }
 }

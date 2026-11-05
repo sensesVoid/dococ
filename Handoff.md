@@ -145,3 +145,8 @@ None. The user accepted the token exposure and chose to leave the existing token
 
 Owner: @Geh
 Workspace: `C:\Users\geral\dococ`
+
+## 2026-11-05 registry fix
+- Fixed ModelRegistry len() brace and sha2 0.11 hex encoding; verify_sha256 + tests green.
+- cargo test --workspace: 125 passed, 1 ignored, 0 failed.
+

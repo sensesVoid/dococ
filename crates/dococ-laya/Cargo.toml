@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 laya-onnx = { git = "https://github.com/NandhaKishorM/laya" }
 serde_json = "1"
+sha2 = "0.11.1"
 thiserror = "2"
