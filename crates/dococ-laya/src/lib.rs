@@ -126,6 +126,8 @@ pub fn build_questions() -> laya::Result<QuestionSet> {
 }
 
 mod registry;
+mod cache;
+pub use cache::*;
 pub use registry::*;
 
 mod tests {
