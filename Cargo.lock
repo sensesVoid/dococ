@@ -427,6 +427,14 @@ name = "dococ-core"
 version = "0.1.0"
 
 [[package]]
+name = "dococ-drift"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dococ-engine"
 version = "0.1.0"
 dependencies = [

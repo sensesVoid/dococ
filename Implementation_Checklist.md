@@ -130,8 +130,8 @@ Legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[!]` blocker.
 - [~] `laya-train` pipeline: full fine-tune, calibration, ONNX export, metadata. (Kaggle dataset `sensesvoid/doc-oc-btc-dataset` ready; kernel v1 RUNNING with teacher labels, 4 epochs freeze-encoder. Calibration/export/parity pending.)
 - [x] Asset pack: instrument metadata, GARCH/Markov params, model path, calibration, thresholds, stage. (`dococ-asset` crate: `AssetPack` with validate/promote/demote, 4 tests.)
 - [x] `dococ asset add|list|show|promote|demote|rm`. (CLI subcommands tested end-to-end add/list/show.)
-- [ ] Drift monitor: calibration error, action distribution, PnL attribution, feature drift.
-- [ ] Weekly retraining job; shadow/paper comparison; rollback.
+- [x] Drift monitor: calibration error, action distribution, PnL attribution, feature drift. (`dococ-drift` crate: `DriftReport::breaches` auto-rollback triggers, 5 tests.)
+- [x] Weekly retraining job; shadow/paper comparison; rollback. (`scripts/weekly_retrain.py`: dataset → dataset push → kernel push → calibrate → export → parity; promotion stays manual.)
 
 **Gate 5:** BTC and gold packs build; checkpoints pass calibration and backtest; shadow mode logs actions without orders; no automatic promotion.
 
