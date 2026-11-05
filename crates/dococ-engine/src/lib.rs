@@ -162,6 +162,20 @@ impl<S: Strategy> Engine<S> {
             // Inference took too long; log and continue with the result anyway.
         }
 
+        // Validate action; invalid actions become NO_ACTION.
+        let action_str = match action {
+            OrderAction::Long => "LONG",
+            OrderAction::Short => "SHORT",
+            OrderAction::Hold => "HOLD",
+            OrderAction::NoAction => "NO_ACTION",
+            OrderAction::Close => "CLOSE",
+        };
+        let action = if dococ_laya::validate_action(action_str) == dococ_laya::ActionValidation::Valid {
+            action
+        } else {
+            OrderAction::NoAction
+        };
+
         // Get confidence from Laya (simplified - in real impl, strategy returns confidence too).
         let confidence = 0.5;
 
